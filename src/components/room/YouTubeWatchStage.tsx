@@ -1,9 +1,10 @@
-import { Clipboard, Maximize, Minimize, Pause, Play, Volume2, VolumeX } from "lucide-react";
+import { Clipboard, Maximize, Minimize, Pause, Play, RotateCcw, RotateCw, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DRIVE_SCOPE, getDriveEnvironment } from "../../config/drive";
 import { PLAYBACK_TIMING } from "../../config/playback";
 import { useDriveVideoPlayer } from "../../hooks/useDriveVideoPlayer";
 import { useDriveMediaLifecycle, type DriveElementError } from "../../hooks/useDriveMediaLifecycle";
+import { shouldShowDriveConnect, useDriveSilentBootstrap } from "../../hooks/useDriveSilentBootstrap";
 import { usePlaybackRoomChannel } from "../../hooks/usePlaybackRoomChannel";
 import { useDelayedSingleClick, usePlayerControlsVisibility } from "../../hooks/usePlayerChrome";
 import { useYouTubePlayer } from "../../hooks/useYouTubePlayer";
@@ -18,7 +19,7 @@ import { getDriveSurfaceAction, isAutoplayPolicyError } from "../../utils/driveP
 import { driveMediaErrorMessage } from "../../utils/driveMediaLifecycle";
 import { toggleElementFullscreen } from "../../utils/fullscreen";
 import { canControlPlayback } from "../../utils/playbackPermissions";
-import { calculateAuthoritativeTargetTime, createHeartbeatPayload, decideDriftCorrection, isBackwardHeartbeatUnsafe } from "../../utils/playbackSync";
+import { calculateAuthoritativeTargetTime, createHeartbeatPayload, decideDriftCorrection, isBackwardHeartbeatUnsafe, issueRelativeAuthoritativeSeek } from "../../utils/playbackSync";
 import { createQueuedRemotePlay, getQueuedRemotePlayTarget, remotePlayBlockReason, shouldReplaceQueuedPlay, type QueuedRemotePlay } from "../../utils/remotePlay";
 import { parseYouTubeUrl } from "../../utils/youtube";
 import { Avatar } from "../ui/Avatar";
@@ -95,6 +96,7 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
   const playbackSnapshot = playback.snapshot;
   const activeSource = playbackStateToMediaSource(playbackSnapshot);
   const activeDriveSource = activeSource?.type === "google_drive" ? activeSource : null;
+  const driveBootstrap = useDriveSilentBootstrap(activeDriveSource, currentProfile.email, driveAuth);
   const driveLifecycle = useDriveMediaLifecycle(activeDriveSource, driveAuth);
 
   const youTubePlayer = useYouTubePlayer({
@@ -358,7 +360,7 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
     setDriveError(null);
     setDriveStatus("Opening Google Drive...");
     try {
-      const accessToken = await requestDriveAccessToken();
+      const accessToken = await requestDriveAccessToken({ loginHint: currentProfile.email });
       const metadata = await pickDriveVideo(accessToken);
       if (metadata.size === null) throw new Error("Drive file size is required for media streaming.");
       await playback.chooseDriveSource(metadata);
@@ -374,7 +376,7 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
     setDriveError(null);
     setDriveStatus("Connecting Google Drive...");
     try {
-      const accessToken = await requestDriveAccessToken({ forcePrompt: driveAuth.reconnectRequired });
+      const accessToken = await requestDriveAccessToken({ loginHint: currentProfile.email });
       let metadata;
       try {
         metadata = await fetchDriveFileMetadata(accessToken, activeSource.fileId);
@@ -551,6 +553,19 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
     void hostCommand("playback:seek", isLocalPlaying ? "playing" : "paused", nextTime);
   }
 
+  function issueHostRelativeSeek(offsetSeconds: number): void {
+    if (!activeReady) return;
+    const snapshot = activePlayer.getSnapshot();
+    lastCommittedSeekRef.current = null;
+    issueRelativeAuthoritativeSeek({
+      isHost,
+      currentTimeSeconds: snapshot.currentTimeSeconds,
+      durationSeconds: snapshot.durationSeconds,
+      offsetSeconds,
+      commitSeek: commitHostSeek
+    });
+  }
+
   async function handleDriveMediaError(error: DriveElementError, manual = false): Promise<void> {
     const generation = driveLifecycle.state.generation;
     const authoritative = playbackSnapshotRef.current;
@@ -664,7 +679,7 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
   }, [activeDriveFileId, activeSourceType]);
 
   const driveConfigured = getDriveEnvironment().configured;
-  const showDriveConnect = activeSource?.type === "google_drive" && !driveLifecycle.mediaSrc && (driveLifecycle.state.phase === "AUTH_REQUIRED" || !driveAuth.authorized);
+  const showDriveConnect = activeSource?.type === "google_drive" && !driveLifecycle.mediaSrc && shouldShowDriveConnect(driveBootstrap, driveAuth.reconnectRequired);
   const showDrivePreparing = activeSource?.type === "google_drive" && !driveLifecycle.mediaSrc && !showDriveConnect;
   const showPlaybackUnlockOverlay = Boolean(activeSource && activeReady && !isHost && (!localReady || remoteBlocked));
   const showPlayerControls = Boolean(activeSource && activeReady && controlsVisible);
@@ -796,11 +811,45 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
               {isHost ? (
                 <button
                   type="button"
+                  className="relative grid h-11 w-11 place-items-center rounded-md text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    cancelSingleClick();
+                    issueHostRelativeSeek(-10);
+                  }}
+                  aria-label="Rewind synchronized video 10 seconds"
+                >
+                  <RotateCcw className="h-6 w-6" />
+                  <span className="pointer-events-none absolute text-[9px] font-bold leading-none">10</span>
+                </button>
+              ) : null}
+              {isHost ? (
+                <button
+                  type="button"
                   className="grid h-11 w-11 place-items-center rounded-md text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
-                  onClick={() => void (isLocalPlaying ? issueHostPause() : issueHostPlay())}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    cancelSingleClick();
+                    void (isLocalPlaying ? issueHostPause() : issueHostPlay());
+                  }}
                   aria-label={isLocalPlaying ? "Pause synchronized video" : "Play synchronized video"}
                 >
                   {isLocalPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+                </button>
+              ) : null}
+              {isHost ? (
+                <button
+                  type="button"
+                  className="relative grid h-11 w-11 place-items-center rounded-md text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    cancelSingleClick();
+                    issueHostRelativeSeek(10);
+                  }}
+                  aria-label="Forward synchronized video 10 seconds"
+                >
+                  <RotateCw className="h-6 w-6" />
+                  <span className="pointer-events-none absolute text-[9px] font-bold leading-none">10</span>
                 </button>
               ) : null}
               <button

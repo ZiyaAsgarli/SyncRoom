@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { calculateAuthoritativeTargetTime, calculateTargetTime, createHeartbeatPayload, decideDriftCorrection, isBackwardHeartbeatUnsafe, shouldUseSnapshotFallback } from "./playbackSync";
+import { describe, expect, it, vi } from "vitest";
+import { calculateAuthoritativeTargetTime, calculateRelativeSeekTarget, calculateTargetTime, createHeartbeatPayload, decideDriftCorrection, isBackwardHeartbeatUnsafe, issueRelativeAuthoritativeSeek, shouldUseSnapshotFallback } from "./playbackSync";
 
 describe("playback synchronization utilities", () => {
   it("calculates target time from network elapsed time", () => {
@@ -10,6 +10,26 @@ describe("playback synchronization utilities", () => {
     const now = Date.parse("2026-07-21T10:00:02.000Z");
     expect(calculateAuthoritativeTargetTime({ eventCurrentTime: 10, sentAt: "2026-07-21T10:00:00.000Z", playbackRate: 1, playbackStatus: "playing", nowMs: now })).toBe(12);
     expect(calculateAuthoritativeTargetTime({ eventCurrentTime: 10, sentAt: "2026-07-21T10:00:00.000Z", playbackRate: 1, playbackStatus: "paused", nowMs: now })).toBe(10);
+  });
+
+  it("clamps relative rewind and forward targets to media bounds", () => {
+    expect(calculateRelativeSeekTarget(6, 120, -10)).toBe(0);
+    expect(calculateRelativeSeekTarget(40, 120, -10)).toBe(30);
+    expect(calculateRelativeSeekTarget(40, 120, 10)).toBe(50);
+    expect(calculateRelativeSeekTarget(115, 120, 10)).toBe(120);
+  });
+
+  it("dispatches exactly one adapter-agnostic authoritative seek for a host", () => {
+    const commitSeek = vi.fn();
+    expect(issueRelativeAuthoritativeSeek({ isHost: true, currentTimeSeconds: 40, durationSeconds: 120, offsetSeconds: -10, commitSeek })).toBe(true);
+    expect(commitSeek).toHaveBeenCalledOnce();
+    expect(commitSeek).toHaveBeenCalledWith(30);
+  });
+
+  it("never dispatches a relative seek for a guest", () => {
+    const commitSeek = vi.fn();
+    expect(issueRelativeAuthoritativeSeek({ isHost: false, currentTimeSeconds: 40, durationSeconds: 120, offsetSeconds: 10, commitSeek })).toBe(false);
+    expect(commitSeek).not.toHaveBeenCalled();
   });
 
   it("applies drift thresholds", () => {

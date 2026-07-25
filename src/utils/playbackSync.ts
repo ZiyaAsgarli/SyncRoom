@@ -12,6 +12,24 @@ export function calculateTargetTime(eventCurrentTime: number, sentAt: string, pl
   return eventCurrentTime + elapsed * playbackRate;
 }
 
+export function calculateRelativeSeekTarget(currentTimeSeconds: number, durationSeconds: number | null, offsetSeconds: number): number {
+  const current = Number.isFinite(currentTimeSeconds) ? currentTimeSeconds : 0;
+  const duration = durationSeconds !== null && Number.isFinite(durationSeconds) ? Math.max(0, durationSeconds) : Number.POSITIVE_INFINITY;
+  return Math.min(duration, Math.max(0, current + offsetSeconds));
+}
+
+export function issueRelativeAuthoritativeSeek(input: {
+  isHost: boolean;
+  currentTimeSeconds: number;
+  durationSeconds: number | null;
+  offsetSeconds: number;
+  commitSeek: (targetTimeSeconds: number) => void;
+}): boolean {
+  if (!input.isHost) return false;
+  input.commitSeek(calculateRelativeSeekTarget(input.currentTimeSeconds, input.durationSeconds, input.offsetSeconds));
+  return true;
+}
+
 export function calculateAuthoritativeTargetTime(input: {
   eventCurrentTime: number;
   sentAt: string;

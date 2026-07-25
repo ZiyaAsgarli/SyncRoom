@@ -4,10 +4,11 @@ interface GoogleTokenResponse {
   access_token?: string;
   expires_in?: number;
   error?: string;
+  scope?: string;
 }
 
 interface GoogleTokenClient {
-  requestAccessToken: (options?: { prompt?: string }) => void;
+  requestAccessToken: (options?: { prompt?: string; login_hint?: string }) => void;
   callback?: (response: GoogleTokenResponse) => void;
 }
 
@@ -22,6 +23,13 @@ export interface DriveAuthSnapshot {
 interface DriveTokenState {
   accessToken: string;
   expiresAt: number;
+}
+
+export interface DriveTokenRequestOptions {
+  forcePrompt?: boolean;
+  silent?: boolean;
+  forceRefresh?: boolean;
+  loginHint?: string;
 }
 
 declare global {
@@ -54,6 +62,7 @@ let tokenRequest: Promise<string> | null = null;
 let tokenClientErrorHandler: ((error: unknown) => void) | null = null;
 let refreshTimer: number | null = null;
 let reconnectRequired = false;
+let lastLoginHint: string | null = null;
 const listeners = new Set<(snapshot: DriveAuthSnapshot) => void>();
 
 export function calculateDriveTokenExpiresAt(nowMs: number, expiresInSeconds: number | undefined): number {
@@ -92,11 +101,12 @@ export function getDriveTokenForTests(): string | null {
 export function clearDriveToken(): void {
   tokenState = null;
   reconnectRequired = false;
+  lastLoginHint = null;
   clearRefreshTimer();
   notifyListeners();
 }
 
-export async function requestDriveAccessToken(options: { forcePrompt?: boolean; silent?: boolean; forceRefresh?: boolean } = {}): Promise<string> {
+export async function requestDriveAccessToken(options: DriveTokenRequestOptions = {}): Promise<string> {
   const env = getDriveEnvironment();
   if (!env.configured) throw new Error(`Drive is not configured: ${env.missing.join(", ")}`);
   const validToken = getValidDriveAccessToken();
@@ -105,7 +115,6 @@ export async function requestDriveAccessToken(options: { forcePrompt?: boolean; 
     return validToken;
   }
   if (tokenRequest) return tokenRequest;
-  if (options.silent && !tokenState) throw new Error("Drive authorization requires a user action.");
 
   tokenRequest = requestNewToken(env.clientId, options).finally(() => {
     tokenRequest = null;
@@ -113,7 +122,7 @@ export async function requestDriveAccessToken(options: { forcePrompt?: boolean; 
   return tokenRequest;
 }
 
-async function requestNewToken(clientId: string, options: { forcePrompt?: boolean }): Promise<string> {
+async function requestNewToken(clientId: string, options: DriveTokenRequestOptions): Promise<string> {
   await loadGoogleIdentityServices();
   const client = getTokenClient(clientId);
   return new Promise((resolve, reject) => {
@@ -132,10 +141,15 @@ async function requestNewToken(clientId: string, options: { forcePrompt?: boolea
         finishWithError(new Error("Drive authorization was cancelled."));
         return;
       }
+      if (!hasExpectedDriveScope(response.scope)) {
+        finishWithError(new Error("Google Drive permission was not granted."));
+        return;
+      }
       tokenState = {
         accessToken: response.access_token,
         expiresAt: calculateDriveTokenExpiresAt(Date.now(), response.expires_in)
       };
+      lastLoginHint = options.loginHint?.trim() || lastLoginHint;
       reconnectRequired = false;
       scheduleSilentRefresh();
       notifyListeners();
@@ -144,7 +158,10 @@ async function requestNewToken(clientId: string, options: { forcePrompt?: boolea
     };
 
     try {
-      client.requestAccessToken({ prompt: options.forcePrompt ? "consent" : tokenState ? "" : "consent" });
+      client.requestAccessToken({
+        prompt: options.silent ? "none" : options.forcePrompt ? "consent" : "",
+        ...(options.loginHint?.trim() ? { login_hint: options.loginHint.trim() } : {})
+      });
     } catch (error) {
       tokenClientErrorHandler = null;
       finishWithError(error);
@@ -175,7 +192,7 @@ function scheduleSilentRefresh(): void {
   const delayMs = Math.max(0, tokenState.expiresAt - Date.now() - SILENT_REFRESH_LEAD_MS);
   refreshTimer = window.setTimeout(() => {
     logDriveSession("silent refresh attempted");
-    void requestDriveAccessToken({ silent: true, forceRefresh: true }).catch(() => {
+    void requestDriveAccessToken({ silent: true, forceRefresh: true, loginHint: lastLoginHint ?? undefined }).catch(() => {
       const expired = !tokenState || tokenState.expiresAt <= Date.now();
       reconnectRequired = expired;
       notifyListeners();
@@ -191,6 +208,10 @@ function scheduleSilentRefresh(): void {
       }
     });
   }, delayMs);
+}
+
+function hasExpectedDriveScope(scope: string | undefined): boolean {
+  return Boolean(scope?.split(/\s+/).includes(DRIVE_SCOPE));
 }
 
 function clearRefreshTimer(): void {
