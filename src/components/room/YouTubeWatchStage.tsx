@@ -683,6 +683,7 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
   const showDrivePreparing = activeSource?.type === "google_drive" && !driveLifecycle.mediaSrc && !showDriveConnect;
   const showPlaybackUnlockOverlay = Boolean(activeSource && activeReady && !isHost && (!localReady || remoteBlocked));
   const showPlayerControls = Boolean(activeSource && activeReady && controlsVisible);
+  const needsSetupFrame = !activeSource || showDriveConnect;
   const visibleCurrentTime = seekDraft ?? displayTime.currentTimeSeconds;
   const seekMaximum = Math.max(1, displayTime.durationSeconds);
   const statusOverlay = playback.status === "Reconnecting" ? "Reconnecting..." : transientOverlay;
@@ -691,7 +692,9 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
     <section>
       <div
         ref={playerStageRef}
-        className={`relative w-full overflow-hidden bg-black ${isFullscreen ? "h-screen w-screen rounded-none border-0 shadow-none" : "aspect-video rounded-xl border border-white/10 shadow-2xl"}`}
+        data-testid="watch-stage"
+        data-media-active={activeSource ? "true" : "false"}
+        className={`watch-stage relative w-full max-w-full overflow-hidden bg-black ${isFullscreen ? "h-dvh w-screen rounded-none border-0 shadow-none" : needsSetupFrame ? "min-h-[24rem] border-y border-white/10 shadow-2xl sm:aspect-video sm:min-h-0 sm:rounded-xl sm:border" : "aspect-video border-y border-white/10 shadow-2xl sm:rounded-xl sm:border"}`}
         onMouseMove={showControls}
         onTouchStart={showControls}
       >
@@ -721,13 +724,13 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
           </button>
         ) : null}
         {activeSource?.type === "google_drive" && showDriveConnect ? (
-          <div className="absolute inset-0 grid place-items-center px-6 text-center">
-            <div className="max-w-md">
+          <div className="absolute inset-0 flex items-center justify-center overflow-y-auto px-4 py-5 text-center sm:px-6">
+            <div className="min-w-0 max-w-md">
               <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">Google Drive video selected</p>
-              <h2 className="mt-3 text-xl font-semibold">{activeSource.name}</h2>
+              <h2 className="mt-3 line-clamp-2 break-words text-lg font-semibold sm:text-xl" title={activeSource.name}>{activeSource.name}</h2>
               <p className="mt-2 text-sm text-zinc-400">{formatFileSize(activeSource.size)} &middot; {activeSource.mimeType}</p>
-              <p className="mt-4 text-sm text-zinc-500">Make sure this Drive file is shared with your friend&apos;s Google account.</p>
-              <Button className="mt-5" onClick={() => void connectDriveForCurrentSource()}>Connect Google Drive</Button>
+              <p className="mt-3 text-sm text-zinc-500 sm:mt-4">Make sure this Drive file is shared with your friend&apos;s Google account.</p>
+              <Button className="mt-4 w-full sm:mt-5 sm:w-auto" onClick={() => void connectDriveForCurrentSource()}>Connect Google Drive</Button>
               {driveError ? <p className="mt-3 text-sm text-red-300">{driveError}</p> : null}
             </div>
           </div>
@@ -738,30 +741,32 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
           </div>
         ) : null}
         {!activeSource ? (
-          <div className="absolute inset-0 grid place-items-center px-6 text-center">
+          <div className="absolute inset-0 flex items-center justify-center overflow-y-auto px-4 py-5 text-center sm:px-6">
             {isHost ? (
-              <div className="w-full max-w-xl">
-                <div className="mb-5 inline-flex rounded-lg border border-white/10 bg-white/5 p-1">
-                  <button className={`min-h-10 rounded-md px-4 text-sm ${sourceTab === "youtube" ? "bg-[#76e4c4] text-black" : "text-zinc-300"}`} onClick={() => setSourceTab("youtube")}>YouTube</button>
-                  <button className={`min-h-10 rounded-md px-4 text-sm ${sourceTab === "google_drive" ? "bg-[#76e4c4] text-black" : "text-zinc-300"}`} onClick={() => setSourceTab("google_drive")}>Google Drive</button>
+              <div className="w-full min-w-0 max-w-xl">
+                <div className="mx-auto mb-4 grid w-full max-w-xs grid-cols-2 rounded-lg border border-white/10 bg-white/5 p-1 sm:mb-5">
+                  <button className={`min-h-11 rounded-md px-3 text-sm ${sourceTab === "youtube" ? "bg-[#76e4c4] text-black" : "text-zinc-300"}`} onClick={() => setSourceTab("youtube")}>YouTube</button>
+                  <button className={`min-h-11 rounded-md px-3 text-sm ${sourceTab === "google_drive" ? "bg-[#76e4c4] text-black" : "text-zinc-300"}`} onClick={() => setSourceTab("google_drive")}>Google Drive</button>
                 </div>
                 {sourceTab === "youtube" ? (
                   <>
                     <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">YouTube source</p>
-                    <h2 className="mt-3 text-2xl font-semibold">Choose a video.</h2>
-                    <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-                      <input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://youtube.com/watch?v=..." className="min-h-11 flex-1 rounded-lg border border-white/10 bg-white/8 px-3 text-white outline-none focus:border-[#76e4c4]" />
-                      <Button variant="secondary" onClick={() => navigator.clipboard?.readText().then(setUrl).catch(() => undefined)}><Clipboard className="h-4 w-4" />Paste</Button>
-                      <Button onClick={() => void loadSource()}>Load video</Button>
+                    <h2 className="mt-2 text-xl font-semibold sm:mt-3 sm:text-2xl">Choose a video.</h2>
+                    <div className="mt-4 grid gap-2 sm:mt-5 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+                      <input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://youtube.com/watch?v=..." className="min-h-11 min-w-0 rounded-lg border border-white/10 bg-white/8 px-3 text-base text-white outline-none focus:border-[#76e4c4] sm:text-sm" />
+                      <div className="grid grid-cols-2 gap-2 sm:contents">
+                        <Button variant="secondary" onClick={() => navigator.clipboard?.readText().then(setUrl).catch(() => undefined)}><Clipboard className="h-4 w-4" />Paste</Button>
+                        <Button onClick={() => void loadSource()}>Load video</Button>
+                      </div>
                     </div>
                     {sourceError ? <p className="mt-3 text-sm text-red-300">{sourceError}</p> : null}
                   </>
                 ) : (
                   <>
                     <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">Google Drive source</p>
-                    <h2 className="mt-3 text-2xl font-semibold">Choose a private Drive video.</h2>
+                    <h2 className="mt-2 text-xl font-semibold sm:mt-3 sm:text-2xl">Choose a private Drive video.</h2>
                     <p className="mt-2 text-sm text-zinc-400">Uses {DRIVE_SCOPE}. The file must be shared with your friend.</p>
-                    <Button className="mt-5" disabled={!driveConfigured} onClick={() => void chooseDriveSource()}>Choose from Google Drive</Button>
+                    <Button className="mt-4 w-full sm:mt-5 sm:w-auto" disabled={!driveConfigured} onClick={() => void chooseDriveSource()}>Choose from Google Drive</Button>
                     {!driveConfigured ? <p className="mt-3 text-sm text-amber-200">Drive environment variables are missing.</p> : null}
                     {driveStatus ? <p className="mt-3 text-sm text-zinc-300">{driveStatus}</p> : null}
                     {driveError ? <p className="mt-3 text-sm text-red-300">{driveError}</p> : null}
@@ -771,7 +776,7 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
             ) : (
               <div>
                 <Avatar src={hostProfile?.avatar_url} name={hostProfile?.full_name ?? "Host"} className="mx-auto mb-4 h-14 w-14" />
-                <h2 className="text-2xl font-semibold">Waiting for host</h2>
+                <h2 className="text-xl font-semibold sm:text-2xl">Waiting for host</h2>
                 <p className="mt-2 text-sm text-zinc-500">{hostProfile?.full_name ?? "The host"} will choose the video.</p>
               </div>
             )}
@@ -784,10 +789,10 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
         ) : null}
         <FlowingMessages messages={flowMessages} enabled={flowingEnabled} />
         {showPlayerControls ? (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/90 via-black/45 to-transparent px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-12 sm:px-4">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/90 via-black/45 to-transparent px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-8 sm:px-4 sm:pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pt-12">
             {isHost ? (
-              <div className="pointer-events-auto mb-2 flex items-center gap-3">
-                <span className="w-10 text-right text-xs tabular-nums text-zinc-200">{formatPlaybackTime(visibleCurrentTime)}</span>
+              <div className="pointer-events-auto mb-1 flex items-center gap-2 sm:mb-2 sm:gap-3">
+                <span className="w-9 text-right text-[11px] tabular-nums text-zinc-200 sm:w-10 sm:text-xs">{formatPlaybackTime(visibleCurrentTime)}</span>
                 <input
                   type="range"
                   min={0}
@@ -801,10 +806,10 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
                   onPointerUp={(event) => commitHostSeek(Number(event.currentTarget.value))}
                   onKeyUp={(event) => commitHostSeek(Number(event.currentTarget.value))}
                   onBlur={(event) => commitHostSeek(Number(event.currentTarget.value))}
-                  className="h-6 min-w-0 flex-1 accent-[#76e4c4]"
+                  className="h-8 min-w-0 flex-1 touch-pan-y accent-[#76e4c4]"
                   aria-label="Seek synchronized video"
                 />
-                <span className="w-10 text-xs tabular-nums text-zinc-200">{formatPlaybackTime(displayTime.durationSeconds)}</span>
+                <span className="w-9 text-[11px] tabular-nums text-zinc-200 sm:w-10 sm:text-xs">{formatPlaybackTime(displayTime.durationSeconds)}</span>
               </div>
             ) : null}
             <div className={`pointer-events-auto flex items-center gap-1 ${isHost ? "justify-start" : "justify-end"}`}>

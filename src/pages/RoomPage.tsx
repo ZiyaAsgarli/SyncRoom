@@ -87,33 +87,33 @@ export function RoomPage() {
 
   return (
     <AppShell>
-      <main className="mx-auto flex max-w-7xl flex-col gap-4 px-3 py-4 sm:px-6 lg:flex-row">
-        <section className="min-w-0 flex-1">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#101113]/80 p-3">
-            <div className="min-w-0">
-              <p className="flex items-center gap-2 text-xs text-zinc-500"><Shield className="h-3.5 w-3.5" />Private two-person room</p>
-              <h1 className="truncate text-lg font-semibold">{room.room_name}</h1>
-            </div>
-            <div className="flex items-center gap-2">
-              <PresenceList members={realtime.members} presence={realtime.presence} />
-              <Button variant="secondary" className="h-10 px-3" onClick={() => void handleInviteCopy()} aria-label="Copy invitation link">
+      <main data-testid="room-layout" className="mx-auto grid max-w-[1600px] grid-cols-1 gap-3 overflow-x-clip px-0 pb-4 pt-2 sm:gap-4 sm:px-4 sm:py-4 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,23rem)] xl:items-start xl:px-6">
+        <section className="room-watch-column min-w-0">
+          <header data-testid="room-header" className="mx-2 mb-3 rounded-lg border border-white/10 bg-[#101113]/88 p-3 sm:mx-0 sm:mb-4 sm:rounded-xl">
+            <div className="flex min-w-0 items-start gap-2">
+              <div className="min-w-0 flex-1 pt-0.5">
+                <p className="flex items-center gap-1.5 text-[11px] text-zinc-500 sm:text-xs"><Shield className="h-3.5 w-3.5 shrink-0" />Private room</p>
+                <h1 className="truncate text-base font-semibold sm:text-lg" title={room.room_name}>{room.room_name}</h1>
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+              <Button variant="secondary" className="h-11 w-11 p-0 md:w-auto md:px-3" onClick={() => void handleInviteCopy()} aria-label="Copy invitation link" title="Copy invitation link">
                 {copyStatus === "copied" ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                <span className="hidden sm:inline">{copyStatusLabel(copyStatus)}</span>
+                <span className="hidden md:inline">{copyStatusLabel(copyStatus)}</span>
               </Button>
-              <Button variant="secondary" className="h-10 px-3 lg:hidden" onClick={() => setChatOpen(true)} aria-label="Open chat"><MessageSquare className="h-4 w-4" /></Button>
-              <Button variant={isHost ? "danger" : "ghost"} className="h-10 px-3" onClick={() => void handleExit()} aria-label={isHost ? "End room" : "Leave room"}>{isHost ? <PhoneOff className="h-4 w-4" /> : <DoorOpen className="h-4 w-4" />}<span className="hidden sm:inline">{isHost ? "End" : "Leave"}</span></Button>
+              <Button variant="secondary" className="h-11 w-11 p-0 xl:hidden" onClick={() => setChatOpen(true)} aria-label="Open chat" title="Open chat"><MessageSquare className="h-4 w-4" /></Button>
+              <Button variant={isHost ? "danger" : "ghost"} className="h-11 w-11 p-0 md:w-auto md:px-3" onClick={() => void handleExit()} aria-label={isHost ? "End room" : "Leave room"} title={isHost ? "End room" : "Leave room"}>{isHost ? <PhoneOff className="h-4 w-4" /> : <DoorOpen className="h-4 w-4" />}<span className="hidden md:inline">{isHost ? "End" : "Leave"}</span></Button>
+              </div>
             </div>
-          </div>
+            <div className="mt-3 min-w-0 border-t border-white/8 pt-3">
+              <PresenceList members={realtime.members} presence={realtime.presence} />
+            </div>
+          </header>
 
           <YouTubeWatchStage room={room} currentProfile={profile} hostProfile={hostProfile} flowMessages={realtime.liveFlowMessages} flowingEnabled={flowingEnabled} />
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <button disabled className="min-h-12 rounded-lg border border-white/10 bg-white/5 px-4 text-left text-sm text-zinc-500">YouTube source · upcoming</button>
-            <button disabled className="min-h-12 rounded-lg border border-white/10 bg-white/5 px-4 text-left text-sm text-zinc-500">Drive video · upcoming</button>
-            <div className="min-h-12 rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-zinc-400">Connection: {realtime.connectionState}</div>
-          </div>
+          {realtime.connectionState !== "online" ? <div className="mx-3 mt-3 rounded-lg border border-amber-300/20 bg-amber-300/8 px-3 py-2 text-sm text-amber-100 sm:mx-0">Connection: {realtime.connectionState}</div> : null}
 
-          {realtime.notice ? <div className="fixed left-1/2 top-20 z-50 -translate-x-1/2 rounded-full border border-white/10 bg-[#101113] px-4 py-2 text-sm text-zinc-200 shadow-xl">{realtime.notice}</div> : null}
+          {realtime.notice ? <div className="fixed left-1/2 top-[calc(4rem+env(safe-area-inset-top))] z-50 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-full border border-white/10 bg-[#101113] px-4 py-2 text-center text-sm text-zinc-200 shadow-xl">{realtime.notice}</div> : null}
         </section>
 
         <ChatPanel

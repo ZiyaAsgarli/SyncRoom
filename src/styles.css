@@ -13,6 +13,7 @@
 
 html {
   min-width: 320px;
+  max-width: 100%;
   overflow-x: hidden;
 }
 
@@ -22,6 +23,12 @@ body {
   min-height: 100dvh;
   overflow-x: hidden;
   background: #070809;
+}
+
+#root {
+  min-height: 100dvh;
+  min-width: 0;
+  overflow-x: clip;
 }
 
 button,
@@ -49,8 +56,11 @@ button {
   }
 }
 
-@media (orientation: landscape) and (max-height: 520px) {
-  .landscape-compact header {
-    display: none;
+@media (orientation: landscape) and (max-height: 600px) and (max-width: 1024px) {
+  .room-watch-column .watch-stage[data-media-active="true"] {
+    aspect-ratio: auto;
+    height: calc(100svh - 4.5rem);
+    min-height: 18rem;
+    max-height: 100dvh;
   }
 }

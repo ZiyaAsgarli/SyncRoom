@@ -54,18 +54,18 @@ export function DashboardPage() {
 
   return (
     <AppShell>
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <main className="mx-auto max-w-7xl overflow-x-clip px-3 py-5 sm:px-6 sm:py-8">
         <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="grid gap-5 lg:grid-cols-[1fr_340px]">
-          <div className="rounded-xl border border-white/10 bg-white/[0.055] p-6">
+          <div className="rounded-xl border border-white/10 bg-white/[0.055] p-4 sm:p-6">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-4">
+              <div className="min-w-0 flex items-center gap-3 sm:gap-4">
                 <Avatar src={profile.avatar_url} name={profile.full_name} className="h-14 w-14" />
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm text-zinc-400">Good to see you,</p>
-                  <h1 className="text-3xl font-semibold">{firstName(profile.full_name)}</h1>
+                  <h1 className="truncate text-2xl font-semibold sm:text-3xl" title={profile.full_name}>{firstName(profile.full_name)}</h1>
                 </div>
               </div>
-              <Button onClick={() => setDialogOpen(true)}><Plus className="h-4 w-4" />Create a private room</Button>
+              <Button className="w-full sm:w-auto" onClick={() => setDialogOpen(true)}><Plus className="h-4 w-4" />Create a private room</Button>
             </div>
             {error ? <p className="mt-4 rounded-lg border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-200">{error}</p> : null}
           </div>
@@ -75,8 +75,8 @@ export function DashboardPage() {
             {friend ? (
               <div className="mt-4 flex items-center gap-3">
                 <Avatar src={friend.avatar_url} name={friend.full_name} />
-                <div>
-                  <p className="font-medium">{friend.full_name}</p>
+                <div className="min-w-0">
+                  <p className="truncate font-medium" title={friend.full_name}>{friend.full_name}</p>
                   <p className="text-sm text-zinc-500">Invited account ready</p>
                 </div>
               </div>
@@ -89,11 +89,11 @@ export function DashboardPage() {
             <h2 className="font-semibold">Current room</h2>
             {activeRoom ? (
               <div className="mt-4 flex flex-col gap-4 rounded-lg border border-white/10 bg-black/20 p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-lg font-semibold">{activeRoom.room_name}</p>
+                <div className="min-w-0">
+                  <p className="break-words text-lg font-semibold">{activeRoom.room_name}</p>
                   <p className="mt-1 text-sm text-zinc-500">{roomStatusLabel(activeRoom.status)} · Invite {activeRoom.invite_code}</p>
                 </div>
-                <Button variant="secondary" onClick={() => navigate(ROUTES.room(activeRoom.id))}>Open room</Button>
+                <Button className="w-full sm:w-auto" variant="secondary" onClick={() => navigate(ROUTES.room(activeRoom.id))}>Open room</Button>
               </div>
             ) : <p className="mt-4 text-sm text-zinc-400">No active room. Create one when you are ready.</p>}
           </div>
@@ -111,7 +111,7 @@ export function DashboardPage() {
           <h2 className="font-semibold">Recent ended rooms</h2>
           {endedRooms.length ? (
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {endedRooms.map((room) => <div key={room.id} className="rounded-lg border border-white/10 bg-black/20 p-4"><p className="font-medium">{room.room_name}</p><p className="mt-1 text-xs text-zinc-500">{new Date(room.created_at).toLocaleDateString()}</p></div>)}
+              {endedRooms.map((room) => <div key={room.id} className="min-w-0 rounded-lg border border-white/10 bg-black/20 p-4"><p className="break-words font-medium">{room.room_name}</p><p className="mt-1 text-xs text-zinc-500">{new Date(room.created_at).toLocaleDateString()}</p></div>)}
             </div>
           ) : <p className="mt-3 text-sm text-zinc-400">Ended rooms will appear here.</p>}
         </section>

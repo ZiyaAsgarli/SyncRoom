@@ -57,7 +57,7 @@ export function FlowingMessages({ messages, enabled }: { messages: Message[]; en
   }, [enabled, lanes, messages, reducedMotion]);
 
   return (
-    <div ref={containerRef} className="pointer-events-none absolute inset-x-0 top-[10%] bottom-[18%] z-20 overflow-hidden" aria-hidden="true">
+    <div ref={containerRef} className="pointer-events-none absolute inset-x-0 top-[9%] bottom-[22%] z-20 overflow-hidden sm:top-[10%] sm:bottom-[18%]" aria-hidden="true">
       <AnimatePresence>
         {active.map(({ message, lane, key }) => {
           const top = `${(lane + 0.5) * (100 / lanes)}%`;
@@ -65,14 +65,14 @@ export function FlowingMessages({ messages, enabled }: { messages: Message[]; en
           return (
             <motion.div
               key={key}
-              className="absolute left-0 flex max-w-[78%] items-center gap-2 rounded-full border border-white/10 bg-black/48 px-3 py-2 text-sm text-white shadow-xl backdrop-blur-md"
+              className="absolute left-0 flex max-w-[72%] items-center gap-1.5 rounded-full border border-white/10 bg-black/52 px-2 py-1.5 text-xs text-white shadow-xl backdrop-blur-md sm:max-w-[78%] sm:gap-2 sm:px-3 sm:py-2 sm:text-sm"
               style={{ top }}
               initial={reducedMotion ? { opacity: 0, x: 16 } : { x: "-105%", opacity: 0.92 }}
               animate={reducedMotion ? { opacity: [0, 1, 1, 0], x: 16 } : { x: "110vw", opacity: 0.96 }}
               exit={{ opacity: 0 }}
               transition={reducedMotion ? { duration: 2.1 } : { duration: 8.8, ease: "linear" }}
             >
-              <Avatar src={profile?.avatar_url} name={profile?.full_name ?? "Friend"} className="h-6 w-6 text-[10px]" />
+              <Avatar src={profile?.avatar_url} name={profile?.full_name ?? "Friend"} className="h-5 w-5 text-[9px] sm:h-6 sm:w-6 sm:text-[10px]" />
               <span className="font-semibold text-[#b7f7de]">{firstName(profile?.full_name ?? "Friend")}</span>
               <span className="truncate">{message.body}</span>
             </motion.div>

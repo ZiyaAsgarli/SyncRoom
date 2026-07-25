@@ -21,10 +21,10 @@ export function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-dvh place-items-center bg-[#070809] px-6 py-12 text-white">
-      <motion.section initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md rounded-2xl border border-white/10 bg-white/[0.055] p-7 shadow-2xl backdrop-blur-xl">
+    <main className="grid min-h-dvh place-items-center bg-[#070809] px-4 py-[max(1rem,env(safe-area-inset-top))] text-white sm:px-6 sm:py-12">
+      <motion.section initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md rounded-xl border border-white/10 bg-white/[0.055] p-5 shadow-2xl backdrop-blur-xl sm:rounded-2xl sm:p-7">
         <p className="text-sm font-semibold tracking-[0.28em] text-[#76e4c4]">{PRODUCT.logoText}</p>
-        <h1 className="mt-5 text-3xl font-semibold tracking-tight">Private watch nights, kept simple.</h1>
+        <h1 className="mt-4 text-2xl font-semibold sm:mt-5 sm:text-3xl">Private watch nights, kept simple.</h1>
         <p className="mt-3 text-zinc-400">{PRODUCT.description}</p>
         <Button onClick={handleLogin} disabled={loading} className="mt-8 w-full">
           <Chrome className="h-5 w-5" />
