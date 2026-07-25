@@ -1,0 +1,74 @@
+# Google Drive Setup
+
+This setup is for SyncRoom's private two-person Google Drive playback. Normal SyncRoom login still uses Supabase Auth with Google OAuth and must not request Drive scopes.
+
+## Google Cloud
+
+Use the existing Google Cloud project for SyncRoom.
+
+Enable these APIs:
+
+- Google Drive API
+- Google Picker API
+
+## OAuth Client
+
+Use the existing Web OAuth client, for example `SyncRoom Web`.
+
+Add Authorized JavaScript origins:
+
+- `http://localhost:5173`
+- the final Vercel HTTPS origin later, for example `https://<vercel-domain>.vercel.app`
+
+Do not remove the existing Supabase redirect URI used by Supabase Auth.
+
+Keep the OAuth app Publishing Status as `Testing`.
+
+Keep only the two private Google accounts as OAuth test users.
+
+SyncRoom requests only this Drive scope during the explicit Drive flow:
+
+```text
+https://www.googleapis.com/auth/drive.file
+```
+
+Do not add the OAuth Client Secret to frontend environment files or repository files.
+
+## Picker API Key
+
+Create a Google API key for Picker.
+
+Recommended restrictions:
+
+- Application restriction: HTTP referrers
+- Local referrer: `http://localhost:5173/*`
+- Later Vercel referrer: `https://<vercel-domain>.vercel.app/*`
+- API restriction: Google Picker API
+
+If Google requires Drive API access for Picker metadata in your project, add only the exact API restriction Google reports.
+
+## Project Number
+
+Copy the Google Cloud Project Number into `VITE_GOOGLE_APP_ID`. This is the numeric project identifier used by `PickerBuilder.setAppId()`.
+
+## Local Environment
+
+Add these to `.env.local`:
+
+```bash
+VITE_GOOGLE_CLIENT_ID=...
+VITE_GOOGLE_PICKER_API_KEY=...
+VITE_GOOGLE_APP_ID=...
+```
+
+Never add:
+
+```bash
+GOOGLE_CLIENT_SECRET=...
+```
+
+## Drive File Sharing
+
+The host must manually share the video file with the friend in Google Drive as a Viewer.
+
+SyncRoom does not change Drive permissions, does not call `permissions.create`, and does not require public files or "Anyone with the link" sharing.
