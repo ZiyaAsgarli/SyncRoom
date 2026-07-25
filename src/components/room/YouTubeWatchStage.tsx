@@ -1,4 +1,4 @@
-import { Clipboard, Maximize, Minimize, Pause, Play, RotateCcw, RotateCw, Volume2, VolumeX } from "lucide-react";
+import { Captions, Clipboard, Maximize, Minimize, Pause, Play, RotateCcw, RotateCw, Volume2, VolumeX, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DRIVE_SCOPE, getDriveEnvironment } from "../../config/drive";
 import { PLAYBACK_TIMING } from "../../config/playback";
@@ -17,7 +17,7 @@ import type { PlaybackAdapter } from "../../types/playbackAdapter";
 import { formatFileSize, playbackStateToMediaSource } from "../../utils/mediaSource";
 import { getDriveSurfaceAction, isAutoplayPolicyError } from "../../utils/drivePlaybackControls";
 import { driveMediaErrorMessage } from "../../utils/driveMediaLifecycle";
-import { toggleElementFullscreen } from "../../utils/fullscreen";
+import { toggleElementFullscreen, unlockScreenOrientation, type ScreenOrientationController } from "../../utils/fullscreen";
 import { canControlPlayback } from "../../utils/playbackPermissions";
 import { calculateAuthoritativeTargetTime, createHeartbeatPayload, decideDriftCorrection, isBackwardHeartbeatUnsafe, issueRelativeAuthoritativeSeek } from "../../utils/playbackSync";
 import { createQueuedRemotePlay, getQueuedRemotePlayTarget, remotePlayBlockReason, shouldReplaceQueuedPlay, type QueuedRemotePlay } from "../../utils/remotePlay";
@@ -58,6 +58,7 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
   const [, setSyncLabel] = useState(isHost ? "Waiting for friend" : "Waiting for host");
   const [isLocalPlaying, setIsLocalPlaying] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [youTubeControlsMode, setYouTubeControlsMode] = useState(false);
   const [localVolume, setLocalVolume] = useState(1);
   const [localMuted, setLocalMuted] = useState(false);
   const [displayTime, setDisplayTime] = useState({ currentTimeSeconds: 0, durationSeconds: 0 });
@@ -75,6 +76,8 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
   const transientTimerRef = useRef<number | null>(null);
   const lastCommittedSeekRef = useRef<number | null>(null);
   const recoveryRestoreRef = useRef<{ generation: number; currentTimeSeconds: number; playbackRate: number; shouldPlay: boolean } | null>(null);
+  const wasStageFullscreenRef = useRef(false);
+  const youTubeControlsModeRef = useRef(false);
   const remoteActionsRef = useRef<RemotePlaybackActions>({
     setSnapshotSource: () => undefined,
     getSnapshot: () => ({ currentTimeSeconds: 0, durationSeconds: null, playbackRate: 1, playerState: -1, availableRates: [1] }),
@@ -145,7 +148,14 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
   useEffect(() => subscribeDriveAuth(setDriveAuth), []);
 
   useEffect(() => {
-    const onFullscreenChange = () => setIsFullscreen(document.fullscreenElement === playerStageRef.current);
+    const onFullscreenChange = () => {
+      const nextFullscreen = document.fullscreenElement === playerStageRef.current;
+      if (wasStageFullscreenRef.current && !nextFullscreen) {
+        unlockScreenOrientation(getScreenOrientation());
+      }
+      wasStageFullscreenRef.current = nextFullscreen;
+      setIsFullscreen(nextFullscreen);
+    };
     document.addEventListener("fullscreenchange", onFullscreenChange);
     return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
   }, []);
@@ -500,13 +510,19 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
     const target = playerStageRef.current;
     if (!target) return;
     try {
-      await toggleElementFullscreen(target, document.fullscreenElement, () => document.exitFullscreen());
+      const preferLandscape = typeof window.matchMedia === "function"
+        && window.matchMedia("(orientation: portrait) and (max-width: 1180px)").matches;
+      await toggleElementFullscreen(target, document.fullscreenElement, () => document.exitFullscreen(), {
+        orientation: getScreenOrientation(),
+        preferLandscape
+      });
     } catch {
       showTransientOverlay("Fullscreen unavailable");
     }
   }
 
   function handleVideoSurfaceClick(): void {
+    if (youTubeControlsModeRef.current) return;
     showControls();
     scheduleSingleClick(() => {
       if (isHost) toggleHostPlaybackFromVideo();
@@ -518,6 +534,36 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
     cancelSingleClick();
     showControls();
     void togglePlayerFullscreen();
+  }
+
+  function openYouTubeControls(): void {
+    if (activeSourceRef.current?.type !== "youtube") return;
+    cancelSingleClick();
+    youTubeControlsModeRef.current = true;
+    setYouTubeControlsMode(true);
+  }
+
+  function closeYouTubeControls(): void {
+    youTubeControlsModeRef.current = false;
+    setYouTubeControlsMode(false);
+    showControls();
+    const authoritative = playbackSnapshotRef.current;
+    const player = activePlayerRef.current;
+    if (!authoritative || !player || activeSourceRef.current?.type !== "youtube") return;
+    const target = calculateAuthoritativeTargetTime({
+      eventCurrentTime: authoritative.current_time_seconds,
+      sentAt: authoritative.updated_at,
+      playbackRate: authoritative.playback_rate,
+      playbackStatus: authoritative.playback_status
+    });
+    suppressRemoteUntil.current = Date.now() + PLAYBACK_TIMING.remoteSuppressionMs;
+    player.seekTo(target);
+    player.setPlaybackRate(authoritative.playback_rate);
+    if (authoritative.playback_status === "playing") {
+      void Promise.resolve(player.play()).catch(() => setRemoteBlocked(true));
+    } else {
+      player.pause();
+    }
   }
 
   function updateLocalVolume(nextVolume: number): void {
@@ -616,6 +662,7 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
     if (!isHost || !activeSourceKey || playbackStatus !== "playing") return;
     if (import.meta.env.DEV) console.info("[SyncRoom playback] heartbeat timer created", { sourceType: activeSourceType });
     const heartbeat = window.setInterval(() => {
+      if (youTubeControlsModeRef.current) return;
       const player = activePlayerRef.current;
       const source = activeSourceRef.current;
       const authoritative = playbackSnapshotRef.current;
@@ -648,6 +695,7 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
     if (!isHost || !activeSourceKey || playbackStatus !== "playing") return;
     if (import.meta.env.DEV) console.info("[SyncRoom playback] snapshot timer created", { sourceType: activeSourceType });
     const snapshotPersist = window.setInterval(() => {
+      if (youTubeControlsModeRef.current) return;
       const player = activePlayerRef.current;
       const source = activeSourceRef.current;
       if (!player || !source) return;
@@ -672,6 +720,8 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
     setRemoteBlocked(false);
     setQueuedRemotePlay(null);
     queuedRemotePlayRef.current = null;
+    youTubeControlsModeRef.current = false;
+    setYouTubeControlsMode(false);
     if (activeSourceType !== "google_drive") {
       setDriveStatus(null);
       setDriveError(null);
@@ -682,19 +732,19 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
   const showDriveConnect = activeSource?.type === "google_drive" && !driveLifecycle.mediaSrc && shouldShowDriveConnect(driveBootstrap, driveAuth.reconnectRequired);
   const showDrivePreparing = activeSource?.type === "google_drive" && !driveLifecycle.mediaSrc && !showDriveConnect;
   const showPlaybackUnlockOverlay = Boolean(activeSource && activeReady && !isHost && (!localReady || remoteBlocked));
-  const showPlayerControls = Boolean(activeSource && activeReady && controlsVisible);
+  const showPlayerControls = Boolean(activeSource && activeReady && controlsVisible && !youTubeControlsMode);
   const needsSetupFrame = !activeSource || showDriveConnect;
   const visibleCurrentTime = seekDraft ?? displayTime.currentTimeSeconds;
   const seekMaximum = Math.max(1, displayTime.durationSeconds);
   const statusOverlay = playback.status === "Reconnecting" ? "Reconnecting..." : transientOverlay;
 
   return (
-    <section>
+    <section className="flex min-h-0 flex-col">
       <div
         ref={playerStageRef}
         data-testid="watch-stage"
         data-media-active={activeSource ? "true" : "false"}
-        className={`watch-stage relative w-full max-w-full overflow-hidden bg-black ${isFullscreen ? "h-dvh w-screen rounded-none border-0 shadow-none" : needsSetupFrame ? "min-h-[24rem] border-y border-white/10 shadow-2xl sm:aspect-video sm:min-h-0 sm:rounded-xl sm:border" : "aspect-video border-y border-white/10 shadow-2xl sm:rounded-xl sm:border"}`}
+        className={`watch-stage relative w-full max-w-full overflow-hidden bg-black xl:min-h-0 ${isFullscreen ? "h-dvh max-h-none w-screen rounded-none border-0 shadow-none" : needsSetupFrame ? "min-h-[24rem] border-y border-white/10 shadow-2xl sm:aspect-video sm:min-h-0 sm:rounded-xl sm:border xl:max-h-[calc(100dvh-10rem-env(safe-area-inset-top))]" : "aspect-video border-y border-white/10 shadow-2xl sm:rounded-xl sm:border xl:max-h-[calc(100dvh-10rem-env(safe-area-inset-top))]"}`}
         onMouseMove={showControls}
         onTouchStart={showControls}
       >
@@ -702,7 +752,7 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
         {activeSource?.type === "google_drive" && driveLifecycle.mediaSrc ? (
           <video ref={drivePlayer.videoRef} src={driveLifecycle.mediaSrc} className="absolute inset-0 h-full w-full bg-black object-contain" playsInline preload="metadata" muted={localMuted} />
         ) : null}
-        {activeSource && activeReady ? (
+        {activeSource && activeReady && !youTubeControlsMode ? (
           <button
             type="button"
             className="absolute inset-0 z-10 cursor-pointer bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[#76e4c4]"
@@ -787,6 +837,20 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
             {statusOverlay}
           </div>
         ) : null}
+        {youTubeControlsMode && activeSource?.type === "youtube" ? (
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex items-start justify-between gap-3 bg-gradient-to-b from-black/80 to-transparent p-3 sm:p-4">
+            <div className="rounded-md bg-black/65 px-3 py-2 text-xs font-medium text-white">YouTube captions &amp; settings</div>
+            <button
+              type="button"
+              className="pointer-events-auto grid h-11 min-w-11 place-items-center rounded-md bg-black/75 px-3 text-sm font-semibold text-white shadow-lg transition hover:bg-black/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
+              onClick={closeYouTubeControls}
+              aria-label="Close YouTube captions and settings"
+            >
+              <X className="h-5 w-5 sm:hidden" />
+              <span className="hidden sm:inline">Done</span>
+            </button>
+          </div>
+        ) : null}
         <FlowingMessages messages={flowMessages} enabled={flowingEnabled} />
         {showPlayerControls ? (
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/90 via-black/45 to-transparent px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-8 sm:px-4 sm:pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pt-12">
@@ -812,38 +876,72 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
                 <span className="w-9 text-[11px] tabular-nums text-zinc-200 sm:w-10 sm:text-xs">{formatPlaybackTime(displayTime.durationSeconds)}</span>
               </div>
             ) : null}
-            <div className={`pointer-events-auto flex items-center gap-1 ${isHost ? "justify-start" : "justify-end"}`}>
-              {isHost ? (
+            <div className="pointer-events-auto grid grid-cols-[1fr_auto_1fr] items-center gap-1">
+              <div className="flex min-w-0 items-center justify-start gap-1">
                 <button
                   type="button"
-                  className="relative grid h-11 w-11 place-items-center rounded-md text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    cancelSingleClick();
-                    issueHostRelativeSeek(-10);
-                  }}
-                  aria-label="Rewind synchronized video 10 seconds"
+                  className="grid h-11 w-11 shrink-0 place-items-center rounded-md text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
+                  onClick={toggleLocalMute}
+                  aria-label={localMuted ? "Unmute video" : "Mute video"}
                 >
-                  <RotateCcw className="h-6 w-6" />
-                  <span className="pointer-events-none absolute text-[9px] font-bold leading-none">10</span>
+                  {localMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
                 </button>
-              ) : null}
-              {isHost ? (
-                <button
-                  type="button"
-                  className="grid h-11 w-11 place-items-center rounded-md text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    cancelSingleClick();
-                    void (isLocalPlaying ? issueHostPause() : issueHostPlay());
-                  }}
-                  aria-label={isLocalPlaying ? "Pause synchronized video" : "Play synchronized video"}
-                >
-                  {isLocalPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-                </button>
-              ) : null}
-              {isHost ? (
-                <button
+                {activeSource?.type === "youtube" ? (
+                  <button
+                    type="button"
+                    className="grid h-11 w-11 shrink-0 place-items-center rounded-md text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openYouTubeControls();
+                    }}
+                    aria-label="Open YouTube captions and settings"
+                  >
+                    <Captions className="h-5 w-5" />
+                  </button>
+                ) : null}
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={localMuted ? 0 : localVolume}
+                  onChange={(event) => updateLocalVolume(Number(event.target.value))}
+                  className="hidden h-6 w-20 accent-white lg:block"
+                  aria-label="Local volume"
+                />
+              </div>
+              <div className="flex items-center justify-center gap-1">
+                {isHost ? (
+                  <button
+                    type="button"
+                    className="relative grid h-11 w-11 place-items-center rounded-md text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      cancelSingleClick();
+                      issueHostRelativeSeek(-10);
+                    }}
+                    aria-label="Rewind synchronized video 10 seconds"
+                  >
+                    <RotateCcw className="h-6 w-6" />
+                    <span className="pointer-events-none absolute text-[9px] font-bold leading-none">10</span>
+                  </button>
+                ) : null}
+                {isHost ? (
+                  <button
+                    type="button"
+                    className="grid h-11 w-11 place-items-center rounded-md text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      cancelSingleClick();
+                      void (isLocalPlaying ? issueHostPause() : issueHostPlay());
+                    }}
+                    aria-label={isLocalPlaying ? "Pause synchronized video" : "Play synchronized video"}
+                  >
+                    {isLocalPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+                  </button>
+                ) : null}
+                {isHost ? (
+                  <button
                   type="button"
                   className="relative grid h-11 w-11 place-items-center rounded-md text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
                   onClick={(event) => {
@@ -856,33 +954,18 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
                   <RotateCw className="h-6 w-6" />
                   <span className="pointer-events-none absolute text-[9px] font-bold leading-none">10</span>
                 </button>
-              ) : null}
-              <button
-                type="button"
-                className="grid h-11 w-11 place-items-center rounded-md text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
-                onClick={toggleLocalMute}
-                aria-label={localMuted ? "Unmute video" : "Mute video"}
-              >
-                {localMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
-              </button>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.05}
-                value={localMuted ? 0 : localVolume}
-                onChange={(event) => updateLocalVolume(Number(event.target.value))}
-                className="hidden h-6 w-24 accent-white sm:block"
-                aria-label="Local volume"
-              />
-              <button
-                type="button"
-                className="ml-auto grid h-11 w-11 place-items-center rounded-md text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
-                onClick={() => void togglePlayerFullscreen()}
-                aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-              >
-                {isFullscreen ? <Minimize className="h-5 w-5" /> : <Maximize className="h-5 w-5" />}
-              </button>
+                ) : null}
+              </div>
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  className="grid h-11 w-11 place-items-center rounded-md text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
+                  onClick={() => void togglePlayerFullscreen()}
+                  aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                >
+                  {isFullscreen ? <Minimize className="h-5 w-5" /> : <Maximize className="h-5 w-5" />}
+                </button>
+              </div>
             </div>
           </div>
         ) : null}
@@ -904,4 +987,10 @@ function formatPlaybackTime(seconds: number): string {
   const minutes = Math.floor(wholeSeconds / 60);
   const remainingSeconds = wholeSeconds % 60;
   return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
+}
+
+function getScreenOrientation(): ScreenOrientationController | undefined {
+  return typeof screen !== "undefined" && "orientation" in screen
+    ? screen.orientation as unknown as ScreenOrientationController
+    : undefined;
 }

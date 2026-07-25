@@ -57,7 +57,7 @@ button {
 }
 
 @media (orientation: landscape) and (max-height: 600px) and (max-width: 1024px) {
-  .room-watch-column .watch-stage[data-media-active="true"] {
+  .room-watch-column .watch-stage[data-media-active="true"]:not(:fullscreen) {
     aspect-ratio: auto;
     height: calc(100svh - 4.5rem);
     min-height: 18rem;

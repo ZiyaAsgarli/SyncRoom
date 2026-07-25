@@ -63,7 +63,7 @@ export function useYouTubePlayer(options: {
       playerRef.current?.destroy();
       playerRef.current = new YT.Player(containerRef.current, {
         videoId: options.videoId ?? undefined,
-        playerVars: { playsinline: 1, rel: 0, modestbranding: 1 },
+        playerVars: { playsinline: 1, rel: 0, modestbranding: 1, controls: 1, fs: 0 },
         events: {
           onReady: () => {
             if (!mountedRef.current) return;

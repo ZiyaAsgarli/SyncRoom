@@ -13,21 +13,21 @@ const stylesSource = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf
 
 describe("responsive product layout architecture", () => {
   it("keeps phones and tablets watch-first until a wide desktop breakpoint", () => {
+    expect(roomSource).toContain('data-testid="watch-row"');
     expect(roomSource).toContain("xl:grid-cols-[minmax(0,1fr)_minmax(20rem,23rem)]");
-    expect(roomSource).toContain("xl:hidden");
     expect(roomSource).not.toContain("lg:flex-row");
-    expect(chatSource).toContain("xl:static");
-    expect(chatSource).toContain("(min-width: 1280px)");
+    expect(chatSource).toContain("xl:self-stretch");
   });
 
-  it("uses a real hidden mobile chat drawer with independent scrolling and keyboard-safe sizing", () => {
-    expect(chatSource).toContain("translate-y-full");
-    expect(chatSource).not.toContain("translate-y-[calc(100%-4.75rem)]");
-    expect(chatSource).toContain("h-[min(88dvh,48rem)]");
+  it("keeps mobile chat inline with independent history scrolling and a safe-area composer", () => {
+    expect(chatSource).toContain("h-[clamp(20rem,45dvh,34rem)]");
     expect(chatSource).toContain("overscroll-contain");
-    expect(chatSource).toContain('document.body.style.overflow = "hidden"');
-    expect(chatSource).toContain('panel.setAttribute("inert", "")');
-    expect(chatSource).toContain('event.key === "Escape"');
+    expect(chatSource).toContain("min-h-0 flex-1");
+    expect(chatSource).toContain("env(safe-area-inset-bottom)");
+    expect(chatSource).not.toContain("translate-y-full");
+    expect(chatSource).not.toContain("aria-modal");
+    expect(roomSource).not.toContain("chatOpen");
+    expect(roomSource.indexOf("<YouTubeWatchStage")).toBeLessThan(roomSource.indexOf("<ChatPanel"));
   });
 
   it("separates content-height setup states from the active 16:9 player", () => {
@@ -35,7 +35,8 @@ describe("responsive product layout architecture", () => {
     expect(stageSource).toContain("min-h-[24rem]");
     expect(stageSource).toContain("sm:aspect-video");
     expect(stageSource).toContain('data-media-active={activeSource ? "true" : "false"}');
-    expect(stageSource).toContain("h-dvh w-screen");
+    expect(stageSource).toContain("h-dvh");
+    expect(stageSource).toContain("w-screen");
     expect(stageSource).not.toMatch(/<video[^>]*key=/s);
   });
 
