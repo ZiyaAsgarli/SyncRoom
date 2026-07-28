@@ -3,8 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ROUTES } from "../config/routes";
 import { supabase } from "../lib/supabase";
-import { privateProfileSync, signOut } from "../services/authService";
-import { isTransientProfileSyncError, shouldSignOutForProfileSyncError } from "../services/profileSyncCoordinator";
+import { checkPrivateAccess, privateProfileSync, signOut } from "../services/authService";
+import { isRevokedAccessError, isTransientProfileSyncError, shouldSignOutForProfileSyncError } from "../services/profileSyncCoordinator";
 import type { Profile } from "../types/database";
 import { handleAuthStateSynchronously, isStaleProfileResult } from "../utils/authLifecycle";
 import { AuthContext, type AuthContextValue, type AuthStatus } from "./authContextValue";
@@ -26,6 +26,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signedOutForDeniedUser = useRef<string | null>(null);
   const lastUserId = useRef<string | null>(null);
 
+  const denyAndSignOut = useCallback(async (deniedUserId: string, revoked: boolean) => {
+    privateProfileSync.clearUser(deniedUserId);
+    setProfile(null);
+    setAccessDenied(true);
+    setStatus("denied");
+    const message = revoked
+      ? "Your access to this private SyncRoom has been removed."
+      : "That Google account is not invited to this private SyncRoom.";
+    setAuthError(message);
+    if (signedOutForDeniedUser.current !== deniedUserId) {
+      signedOutForDeniedUser.current = deniedUserId;
+      setSigningOut(true);
+      try {
+        await signOut();
+      } finally {
+        setSigningOut(false);
+      }
+    }
+    navigate(ROUTES.accessDenied, { replace: true, state: { revoked } });
+  }, [navigate]);
+
   const clearProfileState = useCallback(() => {
     setProfile(null);
     setProfileLoading(false);
@@ -43,6 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         handleSignedOut: () => {
           authGeneration.current += 1;
           lastUserId.current = null;
+          signedOutForDeniedUser.current = null;
           privateProfileSync.clearAll();
           clearProfileState();
           setStatus("anonymous");
@@ -72,6 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (userChanged) {
       authGeneration.current += 1;
       lastUserId.current = userId;
+      signedOutForDeniedUser.current = null;
       setProfile(null);
       setAccessDenied(false);
       setTransientProfileError(null);
@@ -108,20 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfileLoading(false);
 
       if (shouldSignOutForProfileSyncError(error)) {
-        setProfile(null);
-        setAccessDenied(true);
-        setStatus("denied");
-        setAuthError("That Google account is not invited to this private room.");
-        if (signedOutForDeniedUser.current !== userId) {
-          signedOutForDeniedUser.current = userId;
-          setSigningOut(true);
-          try {
-            await signOut();
-          } finally {
-            setSigningOut(false);
-          }
-        }
-        navigate(ROUTES.accessDenied, { replace: true });
+        await denyAndSignOut(userId, isRevokedAccessError(error));
         return;
       }
 
@@ -136,7 +146,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [clearProfileState, initialSessionResolved, navigate, refreshNonce, userId]);
+  }, [clearProfileState, denyAndSignOut, initialSessionResolved, refreshNonce, userId]);
+
+  useEffect(() => {
+    if (!userId || profile?.user_id !== userId || status !== "allowed") return;
+
+    let disposed = false;
+    let requestInFlight = false;
+    const verifyCurrentAccess = async () => {
+      if (disposed || requestInFlight) return;
+      requestInFlight = true;
+      try {
+        await checkPrivateAccess();
+      } catch (error) {
+        if (!disposed && shouldSignOutForProfileSyncError(error)) {
+          await denyAndSignOut(userId, isRevokedAccessError(error));
+        }
+      } finally {
+        requestInFlight = false;
+      }
+    };
+
+    const handleVisible = () => {
+      if (document.visibilityState === "visible") void verifyCurrentAccess();
+    };
+    const intervalId = window.setInterval(() => void verifyCurrentAccess(), 60_000);
+    window.addEventListener("online", verifyCurrentAccess);
+    document.addEventListener("visibilitychange", handleVisible);
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener("online", verifyCurrentAccess);
+      document.removeEventListener("visibilitychange", handleVisible);
+    };
+  }, [denyAndSignOut, profile?.user_id, status, userId]);
 
   const refreshProfile = useCallback(async () => {
     if (!userId) return;

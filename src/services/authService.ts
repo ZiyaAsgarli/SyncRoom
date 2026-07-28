@@ -36,6 +36,16 @@ export async function syncPrivateProfile(): Promise<Profile> {
   return data;
 }
 
+export async function checkPrivateAccess(): Promise<"owner" | "guest"> {
+  const rpc = supabase.rpc.bind(supabase) as unknown as (
+    fn: "check_private_access",
+    args?: undefined
+  ) => Promise<{ data: "owner" | "guest"; error: Error | null }>;
+  const { data, error } = await rpc("check_private_access", undefined);
+  if (error) throw error;
+  return data;
+}
+
 export const privateProfileSync = createProfileSyncCoordinator(syncPrivateProfile);
 
 export function userEmail(user: User | null): string | null {

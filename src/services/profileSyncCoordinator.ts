@@ -33,6 +33,11 @@ export function shouldSignOutForProfileSyncError(error: unknown): boolean {
   return isUnauthorizedProfileError(error);
 }
 
+export function isRevokedAccessError(error: unknown): boolean {
+  const candidate = toErrorLike(error);
+  return /access.+removed|access.+inactive|revoked/i.test(candidate.message ?? "");
+}
+
 export function createProfileSyncCoordinator(syncProfile: () => Promise<Profile>, options: { retryLimit?: number; baseDelayMs?: number; timeoutMs?: number } = {}): ProfileSyncCoordinator {
   const inFlight = new Map<string, Promise<Profile>>();
   const cache = new Map<string, Profile>();

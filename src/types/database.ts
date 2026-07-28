@@ -14,6 +14,12 @@ export interface Profile {
   updated_at: string;
 }
 
+export interface AllowedGuest {
+  email: string;
+  is_active: boolean;
+  created_at: string;
+}
+
 export interface Room {
   id: string;
   invite_code: string;
@@ -64,6 +70,12 @@ export interface RoomPlaybackState {
 export interface Database {
   public: {
     Tables: {
+      allowed_users: {
+        Row: { id: string; email: string; private_role: PrivateRole; is_active: boolean; created_at: string; created_by: string | null };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
       profiles: { Row: Profile; Insert: Partial<Profile>; Update: Partial<Profile>; Relationships: [] };
       rooms: { Row: Room; Insert: Partial<Room>; Update: Partial<Room>; Relationships: [] };
       room_members: { Row: RoomMember; Insert: Partial<RoomMember>; Update: Partial<RoomMember>; Relationships: [] };
@@ -73,6 +85,11 @@ export interface Database {
     Views: Record<string, never>;
     Functions: {
       sync_private_profile: { Args: never; Returns: Profile };
+      check_private_access: { Args: never; Returns: "owner" | "guest" };
+      list_allowed_guests: { Args: never; Returns: AllowedGuest[] };
+      add_allowed_guest: { Args: { email_input: string }; Returns: AllowedGuest };
+      set_allowed_guest_active: { Args: { email_input: string; active_input: boolean }; Returns: AllowedGuest };
+      get_private_room_invite: { Args: { invite_code_input: string }; Returns: { room: Room; members: RoomMember[] } | null };
       create_private_room: { Args: { room_name_input?: string | null }; Returns: Room };
       join_private_room: { Args: { invite_code_input: string }; Returns: Room };
       leave_private_room: { Args: { room_id_input: string }; Returns: void };

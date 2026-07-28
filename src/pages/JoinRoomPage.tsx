@@ -7,7 +7,7 @@ import { Button } from "../components/ui/Button";
 import { LoadingScreen } from "../components/ui/LoadingScreen";
 import { ROUTES } from "../config/routes";
 import { useAuth } from "../hooks/useAuth";
-import { getRoomByInviteCode, getRoomMembers, joinPrivateRoom } from "../services/roomService";
+import { getPrivateRoomInvite, joinPrivateRoom } from "../services/roomService";
 import type { Room, RoomMember } from "../types/database";
 import { normalizeInviteCode } from "../utils/inviteCode";
 import { canJoinRoom } from "../utils/roomStatus";
@@ -29,17 +29,15 @@ export function JoinRoomPage() {
       setLoading(true);
       setError(null);
       try {
-        const found = await getRoomByInviteCode(cleanCode);
+        const invite = await getPrivateRoomInvite(cleanCode);
         if (!mounted) return;
-        if (!found) {
+        if (!invite) {
           setError("That invitation code is not valid.");
           setRoom(null);
           return;
         }
-        const nextMembers = await getRoomMembers(found.id);
-        if (!mounted) return;
-        setRoom(found);
-        setMembers(nextMembers);
+        setRoom(invite.room);
+        setMembers(invite.members);
       } catch (loadError) {
         if (mounted) setError(loadError instanceof Error ? loadError.message : "Invitation could not be loaded.");
       } finally {
@@ -87,7 +85,7 @@ export function JoinRoomPage() {
                   <p className="text-sm text-zinc-500">Host</p>
                 </div>
               </div>
-              <p className="mt-5 text-sm text-zinc-400">Only the other approved Google account can join this room. Room capacity is two people.</p>
+              <p className="mt-5 text-sm text-zinc-400">One approved guest can join the owner in this room. Room capacity is two people.</p>
               {isHost ? <p className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/10 p-3 text-sm text-amber-100">You are the host for this invite. Opening the room will take you back inside.</p> : null}
               {!joinable ? <p className="mt-3 rounded-lg border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-200">This room is ended or already full.</p> : null}
               <Button onClick={isHost || alreadyJoined ? () => navigate(ROUTES.room(room.id)) : handleJoin} disabled={joining || !joinable} className="mt-6 w-full">

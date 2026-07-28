@@ -3,13 +3,15 @@ import { motion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppShell } from "../components/layout/AppShell";
+import { GuestAccessPanel } from "../components/access/GuestAccessPanel";
 import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
 import { Dialog } from "../components/ui/Dialog";
 import { ROUTES } from "../config/routes";
 import { useAuth } from "../hooks/useAuth";
-import { createPrivateRoom, getAllowedProfiles, getMyRooms } from "../services/roomService";
-import type { Profile, Room } from "../types/database";
+import { createPrivateRoom, getMyRooms } from "../services/roomService";
+import type { Room } from "../types/database";
+import { canManageGuestAccess } from "../utils/guestAccess";
 import { firstName } from "../utils/names";
 import { roomStatusLabel } from "../utils/roomStatus";
 
@@ -17,7 +19,6 @@ export function DashboardPage() {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [roomName, setRoomName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -25,15 +26,13 @@ export function DashboardPage() {
 
   useEffect(() => {
     if (!profile) return;
-    void Promise.all([getMyRooms(profile.user_id), getAllowedProfiles()]).then(([nextRooms, nextProfiles]) => {
-      setRooms(nextRooms);
-      setProfiles(nextProfiles);
-    }).catch((loadError: unknown) => setError(loadError instanceof Error ? loadError.message : "Dashboard could not load."));
+    void getMyRooms(profile.user_id).then(setRooms)
+      .catch((loadError: unknown) => setError(loadError instanceof Error ? loadError.message : "Dashboard could not load."));
   }, [profile]);
 
   const activeRoom = useMemo(() => rooms.find((room) => room.status !== "ended"), [rooms]);
   const endedRooms = useMemo(() => rooms.filter((room) => room.status === "ended").slice(0, 4), [rooms]);
-  const friend = profiles.find((item) => item.user_id !== profile?.user_id);
+  const isOwner = canManageGuestAccess(profile?.private_role ?? "friend");
 
   async function handleCreate() {
     setCreating(true);
@@ -65,24 +64,19 @@ export function DashboardPage() {
                   <h1 className="truncate text-2xl font-semibold sm:text-3xl" title={profile.full_name}>{firstName(profile.full_name)}</h1>
                 </div>
               </div>
-              <Button className="w-full sm:w-auto" onClick={() => setDialogOpen(true)}><Plus className="h-4 w-4" />Create a private room</Button>
+              {isOwner ? <Button className="w-full sm:w-auto" onClick={() => setDialogOpen(true)}><Plus className="h-4 w-4" />Create a private room</Button> : null}
             </div>
             {error ? <p className="mt-4 rounded-lg border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-200">{error}</p> : null}
           </div>
 
           <div className="rounded-xl border border-white/10 bg-white/[0.055] p-5">
-            <h2 className="font-semibold">Friend status</h2>
-            {friend ? (
-              <div className="mt-4 flex items-center gap-3">
-                <Avatar src={friend.avatar_url} name={friend.full_name} />
-                <div className="min-w-0">
-                  <p className="truncate font-medium" title={friend.full_name}>{friend.full_name}</p>
-                  <p className="text-sm text-zinc-500">Invited account ready</p>
-                </div>
-              </div>
-            ) : <p className="mt-3 text-sm text-zinc-400">Their profile appears after their first approved Google sign-in.</p>}
+            <h2 className="font-semibold">Private access</h2>
+            <p className="mt-3 text-sm text-zinc-300">{isOwner ? "Owner account" : "Approved guest"}</p>
+            <p className="mt-1 text-sm text-zinc-500">Rooms remain limited to the owner and one guest.</p>
           </div>
         </motion.section>
+
+        {isOwner ? <GuestAccessPanel ownerEmail={profile.email} /> : null}
 
         <section className="mt-6 grid gap-5 lg:grid-cols-[1fr_340px]">
           <div className="rounded-xl border border-white/10 bg-[#101113]/86 p-5">
@@ -118,7 +112,7 @@ export function DashboardPage() {
       </main>
 
       <Dialog title="Create private room" open={dialogOpen} onClose={() => setDialogOpen(false)}>
-        <p className="text-sm text-zinc-400">Each room supports only two approved Google accounts.</p>
+        <p className="text-sm text-zinc-400">Each room supports the owner and one approved guest.</p>
         <label className="mt-5 block text-sm font-medium" htmlFor="room-name">Room name</label>
         <input id="room-name" value={roomName} onChange={(event) => setRoomName(event.target.value)} maxLength={80} placeholder="Movie night" className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-black/24 px-3 text-white outline-none focus:border-[#76e4c4]/70" />
         <Button onClick={handleCreate} disabled={creating} className="mt-5 w-full"><Copy className="h-4 w-4" />{creating ? "Creating..." : "Create room and copy invite"}</Button>

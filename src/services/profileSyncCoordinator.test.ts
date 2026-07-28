@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Profile } from "../types/database";
-import { createProfileSyncCoordinator, isTransientProfileSyncError, isUnauthorizedProfileError, shouldSignOutForProfileSyncError } from "./profileSyncCoordinator";
+import { createProfileSyncCoordinator, isRevokedAccessError, isTransientProfileSyncError, isUnauthorizedProfileError, shouldSignOutForProfileSyncError } from "./profileSyncCoordinator";
 
 const profile: Profile = {
   user_id: "user-1",
@@ -112,5 +112,11 @@ describe("profile sync coordinator", () => {
     expect(shouldSignOutForProfileSyncError({ code: "PGRST003", status: 504 })).toBe(false);
     expect(shouldSignOutForProfileSyncError({ status: 504, message: "Gateway Timeout" })).toBe(false);
     expect(shouldSignOutForProfileSyncError({ code: "42501", message: "not invited" })).toBe(true);
+  });
+
+  it("distinguishes revoked access from an unknown account without weakening denial", () => {
+    expect(isRevokedAccessError({ code: "42501", message: "Your access to this private SyncRoom has been removed" })).toBe(true);
+    expect(isRevokedAccessError({ code: "42501", message: "This Google account is not invited" })).toBe(false);
+    expect(shouldSignOutForProfileSyncError({ code: "42501", message: "Your access has been removed" })).toBe(true);
   });
 });

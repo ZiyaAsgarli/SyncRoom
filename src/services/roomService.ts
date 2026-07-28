@@ -8,12 +8,18 @@ export interface RoomBundle {
   profiles: Profile[];
 }
 
+export interface RoomInviteBundle {
+  room: Room;
+  members: RoomMember[];
+}
+
 type RpcResult<T> = Promise<{ data: T; error: Error | null }>;
 type RoomRpc = {
   (fn: "create_private_room", args: { room_name_input: string | null }): RpcResult<Room>;
   (fn: "join_private_room", args: { invite_code_input: string }): RpcResult<Room>;
   (fn: "leave_private_room", args: { room_id_input: string }): RpcResult<void>;
   (fn: "end_private_room", args: { room_id_input: string }): RpcResult<void>;
+  (fn: "get_private_room_invite", args: { invite_code_input: string }): RpcResult<RoomInviteBundle | null>;
 };
 
 const roomRpc = supabase.rpc.bind(supabase) as unknown as RoomRpc;
@@ -46,8 +52,8 @@ export async function getRoomById(roomId: string): Promise<Room | null> {
   return data;
 }
 
-export async function getRoomByInviteCode(inviteCode: string): Promise<Room | null> {
-  const { data, error } = await supabase.from("rooms").select("*").eq("invite_code", normalizeInviteCode(inviteCode)).maybeSingle();
+export async function getPrivateRoomInvite(inviteCode: string): Promise<RoomInviteBundle | null> {
+  const { data, error } = await roomRpc("get_private_room_invite", { invite_code_input: normalizeInviteCode(inviteCode) });
   if (error) throw error;
   return data;
 }
@@ -73,12 +79,6 @@ export async function getMyRooms(userId: string): Promise<Room[]> {
   const ids = [...new Set(((memberships ?? []) as Array<{ room_id: string }>).map((membership) => membership.room_id))];
   if (ids.length === 0) return [];
   const { data, error } = await supabase.from("rooms").select("*").in("id", ids).order("created_at", { ascending: false });
-  if (error) throw error;
-  return data ?? [];
-}
-
-export async function getAllowedProfiles(): Promise<Profile[]> {
-  const { data, error } = await supabase.from("profiles").select("*").order("private_role", { ascending: false });
   if (error) throw error;
   return data ?? [];
 }

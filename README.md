@@ -1,6 +1,6 @@
 # SyncRoom
 
-SyncRoom is a private two-person watch-party web application. It is intentionally not a public platform: only the owner and one trusted friend should ever be able to sign in, create rooms, join rooms, send messages, or see application data.
+SyncRoom is a private two-person watch-party web application. It is intentionally not a public platform: one permanent owner approves the Google accounts that may sign in, and each room still contains only the owner and one approved guest.
 
 Visual tagline: "Just us, perfectly in sync."
 
@@ -15,7 +15,7 @@ There is no custom Node.js, Express, Socket.IO, Railway, Render, Cloud Run, Redi
 
 ## Private Two-Person Constraint
 
-Only two manually approved Google emails are allowed. The whitelist lives in `public.allowed_users`, not in public frontend environment variables. The frontend never stores a service-role key and cannot insert, update, delete, or enumerate the whitelist table directly.
+The private access list lives in `public.allowed_users`, not in public frontend environment variables. The owner can approve or revoke guests through owner-only RPCs; guests cannot enumerate or modify the list. The frontend never stores a service-role key and cannot write the table directly.
 
 ## Environment Variables
 
@@ -37,8 +37,8 @@ Do not put a Google OAuth Client Secret in any frontend environment file.
 ## Supabase Setup
 
 1. Create a Supabase project on the Free plan.
-2. Run `supabase/migrations/202607210001_syncroom_foundation.sql` in the SQL editor or through the Supabase CLI.
-3. Insert exactly two lowercase emails into `public.allowed_users`:
+2. Run the migrations in filename order. Existing deployments should apply `supabase/migrations/202607280001_owner_managed_guest_access.sql` after the earlier playback migrations.
+3. For a fresh deployment, seed the permanent owner and optionally one initial guest using the internal compatibility role `friend`:
 
 ```sql
 insert into public.allowed_users (email, private_role)
@@ -47,8 +47,19 @@ values
   (lower('FRIEND_GOOGLE_EMAIL'), 'friend');
 ```
 
-4. Enable Realtime for `messages` and `room_members` in Supabase if it is not already enabled for those tables.
-5. Keep Row Level Security enabled.
+4. The owner can then manage additional guest accounts from the **Guest access** dashboard section. The migration keeps the existing `friend` row active and uses that enum value internally for all guests to preserve room and message history.
+5. Enable Realtime for `messages` and `room_members` in Supabase if it is not already enabled for those tables.
+
+### Owner-managed guest access
+
+- There is exactly one owner. The application provides no owner-promotion flow.
+- Guest email addresses are trimmed, lowercased, unique, and soft-disabled when access is removed.
+- Revocation preserves profiles, room membership, and message history while immediately blocking protected RLS/RPC access.
+- An already-open guest session is signed out after the next access recheck; protected database operations are denied immediately.
+- An invite link does not grant access by itself. The Google account must also be an active approved guest.
+- Every room remains capped atomically at two active members: the owner and one guest.
+- While the Google OAuth application remains in Testing mode, each newly approved guest must also be added manually as a Google OAuth test user in Google Cloud Console before that account can complete Google sign-in.
+6. Keep Row Level Security enabled.
 
 ## Database Objects
 

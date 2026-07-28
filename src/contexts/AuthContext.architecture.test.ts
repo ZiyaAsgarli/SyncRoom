@@ -17,5 +17,15 @@ describe("AuthContext architecture", () => {
     const callbackRegion = source.slice(callbackStart, effectCleanup);
     expect(callbackRegion).not.toContain("privateProfileSync.sync");
     expect(callbackRegion).not.toContain("signOut()");
+    expect(callbackRegion).not.toContain("checkPrivateAccess");
+  });
+
+  it("checks active access outside the auth callback without an unbounded request loop", () => {
+    expect(source).toContain("await checkPrivateAccess()");
+    expect(source).toContain("requestInFlight");
+    expect(source).toContain("60_000");
+    expect(source).toContain('addEventListener("online"');
+    expect(source).toContain('addEventListener("visibilitychange"');
+    expect(source).toContain("denyAndSignOut(userId, isRevokedAccessError(error))");
   });
 });
