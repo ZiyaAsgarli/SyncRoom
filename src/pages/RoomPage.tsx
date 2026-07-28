@@ -13,7 +13,7 @@ import { useRoomRealtime } from "../hooks/useRoomRealtime";
 import { endPrivateRoom, getRoomById, leavePrivateRoom, sendMessage } from "../services/roomService";
 import type { Room } from "../types/database";
 import { copyStatusLabel, copyTextWithFallback, type CopyStatus } from "../utils/copyFeedback";
-import { createOptimisticMessage, removeOptimisticMessage } from "../utils/chatMessages";
+import { createOptimisticMessage, mergeConfirmedMessage, removeOptimisticMessage } from "../utils/chatMessages";
 
 export function RoomPage() {
   const { roomId = "" } = useParams();
@@ -24,7 +24,7 @@ export function RoomPage() {
   const [error, setError] = useState<string | null>(null);
   const [flowingEnabled, setFlowingEnabled] = useState(true);
   const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
-  const realtime = useRoomRealtime({ roomId: room?.id ?? null, userId: profile?.user_id ?? null, enabled: Boolean(room && profile) });
+  const realtime = useRoomRealtime({ roomId: room?.id ?? null, userId: profile?.user_id ?? null, currentProfile: profile, enabled: Boolean(room && profile) });
 
   useEffect(() => {
     let mounted = true;
@@ -55,7 +55,7 @@ export function RoomPage() {
     realtime.pushLiveFlowMessage(optimistic);
     try {
       const saved = await sendMessage(room.id, profile.user_id, body);
-      realtime.setMessages((messages) => [...messages.filter((message) => message.id !== optimistic.id && message.id !== saved.id), saved]);
+      realtime.setMessages((messages) => mergeConfirmedMessage(messages, saved));
     } catch (sendError) {
       realtime.setMessages((messages) => removeOptimisticMessage(messages, optimistic.id));
       throw sendError;
@@ -87,12 +87,12 @@ export function RoomPage() {
   return (
     <AppShell>
       <main data-testid="room-layout" className="room-layout mx-auto flex min-h-[calc(100dvh-3.5rem-env(safe-area-inset-top))] max-w-[1600px] flex-col gap-3 overflow-x-clip px-0 pb-[env(safe-area-inset-bottom)] pt-2 sm:min-h-[calc(100dvh-4rem-env(safe-area-inset-top))] sm:gap-4 sm:px-4 sm:py-3 xl:max-h-[calc(100dvh-4rem-env(safe-area-inset-top))] xl:min-h-0 xl:px-6">
-        <header data-testid="room-header" className="mx-2 grid min-w-0 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 rounded-lg border border-white/10 bg-[#101113]/88 px-3 py-2.5 sm:mx-0 sm:rounded-xl xl:grid-cols-[minmax(0,1fr)_auto_auto] xl:gap-x-4">
+        <header data-testid="room-header" className="mx-2 grid min-w-0 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 rounded-lg border border-white/12 bg-[#101113]/92 px-3.5 py-3 shadow-[0_12px_36px_rgba(0,0,0,0.18)] backdrop-blur-xl sm:mx-0 sm:rounded-xl sm:px-4 xl:grid-cols-[minmax(0,1fr)_auto_auto] xl:gap-x-5">
           <div className="min-w-0">
             <p className="flex items-center gap-1.5 text-[11px] text-zinc-500 sm:text-xs"><Shield className="h-3.5 w-3.5 shrink-0" />Private room</p>
             <h1 className="truncate text-base font-semibold sm:text-lg" title={room.room_name}>{room.room_name}</h1>
           </div>
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 xl:col-start-3">
+          <div className="flex shrink-0 items-center gap-2 xl:col-start-3">
               <Button variant="secondary" className="h-11 w-11 p-0 md:w-auto md:px-3" onClick={() => void handleInviteCopy()} aria-label="Copy invitation link" title="Copy invitation link">
                 {copyStatus === "copied" ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                 <span className="hidden md:inline">{copyStatusLabel(copyStatus)}</span>
@@ -116,6 +116,7 @@ export function RoomPage() {
           <ChatPanel
             room={room}
             messages={realtime.messages}
+            members={realtime.members}
             currentProfile={profile}
             flowingEnabled={flowingEnabled}
             onFlowingChange={setFlowingEnabled}

@@ -744,7 +744,7 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
         ref={playerStageRef}
         data-testid="watch-stage"
         data-media-active={activeSource ? "true" : "false"}
-        className={`watch-stage relative w-full max-w-full overflow-hidden bg-black xl:min-h-0 ${isFullscreen ? "h-dvh max-h-none w-screen rounded-none border-0 shadow-none" : needsSetupFrame ? "min-h-[24rem] border-y border-white/10 shadow-2xl sm:aspect-video sm:min-h-0 sm:rounded-xl sm:border xl:max-h-[calc(100dvh-10rem-env(safe-area-inset-top))]" : "aspect-video border-y border-white/10 shadow-2xl sm:rounded-xl sm:border xl:max-h-[calc(100dvh-10rem-env(safe-area-inset-top))]"}`}
+        className={`watch-stage relative w-full max-w-full overflow-hidden bg-black xl:min-h-0 ${isFullscreen ? "h-dvh max-h-none w-screen rounded-none border-0 shadow-none" : needsSetupFrame ? "min-h-[24rem] border-y border-white/12 shadow-[0_20px_60px_rgba(0,0,0,0.34)] ring-1 ring-white/[0.025] sm:aspect-video sm:min-h-0 sm:rounded-xl sm:border xl:max-h-[calc(100dvh-10rem-env(safe-area-inset-top))]" : "aspect-video border-y border-white/12 shadow-[0_20px_60px_rgba(0,0,0,0.34)] ring-1 ring-white/[0.025] sm:rounded-xl sm:border xl:max-h-[calc(100dvh-10rem-env(safe-area-inset-top))]"}`}
         onMouseMove={showControls}
         onTouchStart={showControls}
       >
@@ -880,7 +880,7 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
               <div className="flex min-w-0 items-center justify-start gap-1">
                 <button
                   type="button"
-                  className="grid h-11 w-11 shrink-0 place-items-center rounded-md text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
+                  className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-white/[0.06] bg-black/20 text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
                   onClick={toggleLocalMute}
                   aria-label={localMuted ? "Unmute video" : "Mute video"}
                 >
@@ -889,7 +889,7 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
                 {activeSource?.type === "youtube" ? (
                   <button
                     type="button"
-                    className="grid h-11 w-11 shrink-0 place-items-center rounded-md text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
+                    className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-white/[0.06] bg-black/20 text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
                     onClick={(event) => {
                       event.stopPropagation();
                       openYouTubeControls();
@@ -914,7 +914,7 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
                 {isHost ? (
                   <button
                     type="button"
-                    className="relative grid h-11 w-11 place-items-center rounded-md text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
+                    className="relative grid h-11 w-11 place-items-center rounded-lg border border-white/[0.06] bg-black/20 text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
                     onClick={(event) => {
                       event.stopPropagation();
                       cancelSingleClick();
@@ -929,7 +929,7 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
                 {isHost ? (
                   <button
                     type="button"
-                    className="grid h-11 w-11 place-items-center rounded-md text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
+                    className="grid h-11 w-11 place-items-center rounded-lg border border-white/10 bg-white/10 text-white shadow-sm transition hover:bg-white/16 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
                     onClick={(event) => {
                       event.stopPropagation();
                       cancelSingleClick();
@@ -943,7 +943,7 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
                 {isHost ? (
                   <button
                   type="button"
-                  className="relative grid h-11 w-11 place-items-center rounded-md text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
+                  className="relative grid h-11 w-11 place-items-center rounded-lg border border-white/[0.06] bg-black/20 text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
                   onClick={(event) => {
                     event.stopPropagation();
                     cancelSingleClick();
@@ -959,7 +959,7 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
               <div className="flex justify-end">
                 <button
                   type="button"
-                  className="grid h-11 w-11 place-items-center rounded-md text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
+                  className="grid h-11 w-11 place-items-center rounded-lg border border-white/[0.06] bg-black/20 text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
                   onClick={() => void togglePlayerFullscreen()}
                   aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
                 >

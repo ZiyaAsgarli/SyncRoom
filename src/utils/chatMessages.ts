@@ -1,5 +1,5 @@
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
-import type { Message } from "../types/database";
+import type { Message, Profile, RoomMember } from "../types/database";
 
 const OPTIMISTIC_PREFIX = "optimistic-";
 const OPTIMISTIC_REPLACE_WINDOW_MS = 15_000;
@@ -71,4 +71,28 @@ export function shouldFlowLiveMessage(message: Message, baselineIds: ReadonlySet
 export function createFlowSignature(message: Pick<Message, "user_id" | "body" | "created_at">): string {
   const bucket = Math.floor(Date.parse(message.created_at) / 10_000);
   return `${message.user_id}:${bucket}:${message.body}`;
+}
+
+export function resolveMessageProfile(message: Message, members: readonly RoomMember[], currentProfile?: Profile | null): Profile | undefined {
+  if (hasDisplayName(message.profiles)) return message.profiles;
+  if (currentProfile?.user_id === message.user_id && hasDisplayName(currentProfile)) return currentProfile;
+  const memberProfile = members.find((member) => member.user_id === message.user_id)?.profiles;
+  if (hasDisplayName(memberProfile)) return memberProfile;
+  return message.profiles ?? memberProfile;
+}
+
+export function hydrateMessageProfiles(messages: readonly Message[], members: readonly RoomMember[], currentProfile?: Profile | null): Message[] {
+  return messages.map((message) => {
+    const profile = resolveMessageProfile(message, members, currentProfile);
+    return profile && profile !== message.profiles ? { ...message, profiles: profile } : message;
+  });
+}
+
+export function messageSenderName(profile?: Profile | null, fallback = "Private user"): string {
+  const displayName = profile?.full_name?.trim();
+  return displayName || fallback;
+}
+
+function hasDisplayName(profile?: Profile | null): profile is Profile {
+  return Boolean(profile?.full_name?.trim());
 }

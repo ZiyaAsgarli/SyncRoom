@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Message } from "../../types/database";
 import { firstName } from "../../utils/names";
+import { messageSenderName } from "../../utils/chatMessages";
 import { Avatar } from "../ui/Avatar";
 import { assignFlowingLane, maxLanesForWidth } from "./flowingEngine";
 import { useReducedMotionPreference } from "../../hooks/useReducedMotionPreference";
@@ -62,6 +63,7 @@ export function FlowingMessages({ messages, enabled }: { messages: Message[]; en
         {active.map(({ message, lane, key }) => {
           const top = `${(lane + 0.5) * (100 / lanes)}%`;
           const profile = message.profiles;
+          const senderName = messageSenderName(profile);
           return (
             <motion.div
               key={key}
@@ -72,8 +74,8 @@ export function FlowingMessages({ messages, enabled }: { messages: Message[]; en
               exit={{ opacity: 0 }}
               transition={reducedMotion ? { duration: 2.1 } : { duration: 8.8, ease: "linear" }}
             >
-              <Avatar src={profile?.avatar_url} name={profile?.full_name ?? "Friend"} className="h-5 w-5 text-[9px] sm:h-6 sm:w-6 sm:text-[10px]" />
-              <span className="font-semibold text-[#b7f7de]">{firstName(profile?.full_name ?? "Friend")}</span>
+              <Avatar src={profile?.avatar_url} name={senderName} className="h-5 w-5 text-[9px] sm:h-6 sm:w-6 sm:text-[10px]" />
+              <span className="font-semibold text-[#b7f7de]">{firstName(senderName)}</span>
               <span className="truncate">{message.body}</span>
             </motion.div>
           );

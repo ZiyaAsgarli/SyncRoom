@@ -1,21 +1,23 @@
 import { Smile, Send } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { Message, Profile, Room } from "../../types/database";
+import type { Message, Profile, Room, RoomMember } from "../../types/database";
 import { FREQUENT_EMOJIS, insertAtCursor } from "../../utils/emoji";
 import { formatMessageTime, validateMessageBody } from "../../utils/messages";
+import { messageSenderName, resolveMessageProfile } from "../../utils/chatMessages";
 import { Avatar } from "../ui/Avatar";
 import { Button } from "../ui/Button";
 
 interface ChatPanelProps {
   room: Room;
   messages: Message[];
+  members: RoomMember[];
   currentProfile: Profile;
   flowingEnabled: boolean;
   onFlowingChange: (enabled: boolean) => void;
   onSend: (body: string) => Promise<void>;
 }
 
-export function ChatPanel({ room, messages, currentProfile, flowingEnabled, onFlowingChange, onSend }: ChatPanelProps) {
+export function ChatPanel({ room, messages, members, currentProfile, flowingEnabled, onFlowingChange, onSend }: ChatPanelProps) {
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -80,10 +82,10 @@ export function ChatPanel({ room, messages, currentProfile, flowingEnabled, onFl
   return (
     <aside
       data-testid="room-chat"
-      className="room-chat-panel flex h-[clamp(20rem,45dvh,34rem)] min-h-0 w-full flex-col overscroll-contain border-y border-white/10 bg-[#101113]/98 text-white shadow-2xl sm:rounded-xl sm:border xl:h-auto xl:max-h-[calc(100dvh-10rem-env(safe-area-inset-top))] xl:self-stretch"
+      className="room-chat-panel flex h-[clamp(20rem,45dvh,34rem)] min-h-0 w-full flex-col overscroll-contain border-y border-white/12 bg-[#0e1011]/98 text-white shadow-[0_18px_50px_rgba(0,0,0,0.28)] sm:rounded-xl sm:border xl:h-auto xl:max-h-[calc(100dvh-10rem-env(safe-area-inset-top))] xl:self-stretch"
       aria-label="Room chat"
     >
-      <header className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-white/8 px-4">
+      <header className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4">
         <div>
           <h2 className="font-semibold">Messages</h2>
           <label className="mt-1 flex items-center gap-2 text-xs text-zinc-400">
@@ -93,20 +95,21 @@ export function ChatPanel({ room, messages, currentProfile, flowingEnabled, onFl
         </div>
       </header>
 
-      <div ref={listRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4">
+      <div ref={listRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3.5 py-4 sm:px-4">
         {messages.length === 0 ? (
           <div className="rounded-lg border border-dashed border-white/12 p-4 text-sm text-zinc-400">No messages yet.</div>
         ) : messages.map((message) => {
-          const profile = message.profiles ?? (message.user_id === currentProfile.user_id ? currentProfile : undefined);
+          const profile = resolveMessageProfile(message, members, currentProfile);
+          const senderName = messageSenderName(profile);
           return (
-            <article key={message.id} className="flex gap-3">
-              <Avatar src={profile?.avatar_url} name={profile?.full_name ?? "Friend"} className="h-8 w-8 text-xs" />
+            <article key={message.id} className="group flex gap-3 rounded-lg px-1.5 py-1 transition-colors hover:bg-white/[0.035]">
+              <Avatar src={profile?.avatar_url} name={senderName} className="h-8 w-8 text-xs ring-1 ring-white/10" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-2">
-                  <span className="truncate text-sm font-semibold">{profile?.full_name ?? "Private user"}</span>
-                  <time className="text-xs text-zinc-500">{formatMessageTime(message.created_at)}</time>
+                  <span className="truncate text-sm font-semibold text-zinc-100">{senderName}</span>
+                  <time className="shrink-0 text-[11px] tabular-nums text-zinc-500">{formatMessageTime(message.created_at)}</time>
                 </div>
-                <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-200">{message.body}</p>
+                <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-300">{message.body}</p>
               </div>
             </article>
           );
@@ -126,7 +129,7 @@ export function ChatPanel({ room, messages, currentProfile, flowingEnabled, onFl
       ) : null}
 
       <form
-        className="shrink-0 border-t border-white/8 bg-[#101113] p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
+        className="shrink-0 border-t border-white/10 bg-[#0e1011] p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
         onSubmit={(event) => {
           event.preventDefault();
           void submit();
@@ -148,7 +151,7 @@ export function ChatPanel({ room, messages, currentProfile, flowingEnabled, onFl
               }
             }}
             placeholder={ended ? "Room has ended" : "Message"}
-            className="min-h-11 min-w-0 flex-1 resize-none rounded-lg border border-white/10 bg-black/24 px-3 py-2 text-base text-white outline-none transition placeholder:text-zinc-600 focus:border-[#76e4c4]/70 sm:text-sm"
+            className="min-h-11 min-w-0 flex-1 resize-none rounded-lg border border-white/12 bg-black/28 px-3 py-2 text-base text-white shadow-inner outline-none transition placeholder:text-zinc-600 focus:border-[#76e4c4]/70 focus:bg-black/34 sm:text-sm"
           />
           <div ref={emojiRef} className="relative">
             <Button

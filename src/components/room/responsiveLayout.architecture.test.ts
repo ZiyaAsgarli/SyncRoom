@@ -28,6 +28,8 @@ describe("responsive product layout architecture", () => {
     expect(chatSource).not.toContain("aria-modal");
     expect(roomSource).not.toContain("chatOpen");
     expect(roomSource.indexOf("<YouTubeWatchStage")).toBeLessThan(roomSource.indexOf("<ChatPanel"));
+    expect(roomSource).toContain("members={realtime.members}");
+    expect(chatSource).toContain("resolveMessageProfile(message, members, currentProfile)");
   });
 
   it("separates content-height setup states from the active 16:9 player", () => {

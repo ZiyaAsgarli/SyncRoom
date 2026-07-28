@@ -4,15 +4,16 @@ import { supabase } from "../lib/supabase";
 import { getMessages, getRoomMembers } from "../services/roomService";
 import type { Message, Profile, RoomMember } from "../types/database";
 import type { PresenceMeta, PresenceState } from "../components/room/PresenceList";
-import { createFlowSignature, mergeConfirmedMessage, parseMessageInsertPayload, shouldFlowLiveMessage } from "../utils/chatMessages";
+import { createFlowSignature, hydrateMessageProfiles, mergeConfirmedMessage, parseMessageInsertPayload, resolveMessageProfile, shouldFlowLiveMessage } from "../utils/chatMessages";
 
 interface UseRoomRealtimeOptions {
   roomId: string | null;
   userId: string | null;
+  currentProfile: Profile | null;
   enabled: boolean;
 }
 
-export function useRoomRealtime({ roomId, userId, enabled }: UseRoomRealtimeOptions) {
+export function useRoomRealtime({ roomId, userId, currentProfile, enabled }: UseRoomRealtimeOptions) {
   const [members, setMembers] = useState<RoomMember[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [liveFlowMessages, setLiveFlowMessages] = useState<Message[]>([]);
@@ -23,15 +24,19 @@ export function useRoomRealtime({ roomId, userId, enabled }: UseRoomRealtimeOpti
   const subscriptionReady = useRef(false);
   const flowedSignatures = useRef<Set<string>>(new Set());
   const membersRef = useRef<RoomMember[]>([]);
-
-  useEffect(() => {
-    membersRef.current = members;
-  }, [members]);
+  const currentProfileRef = useRef<Profile | null>(currentProfile);
+  currentProfileRef.current = currentProfile;
 
   const enrichMessage = useCallback((message: Message): Message => {
-    if (message.profiles) return message;
-    const profile = membersRef.current.find((member) => member.user_id === message.user_id)?.profiles as Profile | undefined;
+    const profile = resolveMessageProfile(message, membersRef.current, currentProfileRef.current);
     return profile ? { ...message, profiles: profile } : message;
+  }, []);
+
+  const applyMembers = useCallback((nextMembers: RoomMember[]) => {
+    membersRef.current = nextMembers;
+    setMembers(nextMembers);
+    setMessages((current) => hydrateMessageProfiles(current, nextMembers, currentProfileRef.current));
+    setLiveFlowMessages((current) => hydrateMessageProfiles(current, nextMembers, currentProfileRef.current));
   }, []);
 
   const pushLiveFlowMessage = useCallback((message: Message) => {
@@ -48,12 +53,21 @@ export function useRoomRealtime({ roomId, userId, enabled }: UseRoomRealtimeOpti
     baselineIds.current = new Set();
     subscriptionReady.current = false;
     flowedSignatures.current = new Set();
+    setMessages([]);
     setLiveFlowMessages([]);
+    membersRef.current = [];
+    setMembers([]);
 
     void Promise.all([getRoomMembers(roomId), getMessages(roomId)]).then(([nextMembers, nextMessages]) => {
       if (!mounted) return;
+      membersRef.current = nextMembers;
       setMembers(nextMembers);
-      setMessages(nextMessages);
+      setMessages((current) => hydrateMessageProfiles(
+        nextMessages.reduce((merged, message) => mergeConfirmedMessage(merged, message), current),
+        nextMembers,
+        currentProfileRef.current
+      ));
+      setLiveFlowMessages((current) => hydrateMessageProfiles(current, nextMembers, currentProfileRef.current));
       baselineIds.current = new Set(nextMessages.map((message) => message.id));
     }).catch((error: unknown) => {
       console.error("Room realtime initial load failed", error);
@@ -95,7 +109,7 @@ export function useRoomRealtime({ roomId, userId, enabled }: UseRoomRealtimeOpti
         if (inserted.user_id !== userId) setConnectionState("online");
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "room_members", filter: `room_id=eq.${roomId}` }, () => {
-        void getRoomMembers(roomId).then(setMembers);
+        void getRoomMembers(roomId).then(applyMembers);
       })
       .subscribe(async (status) => {
         if (import.meta.env.DEV) console.info(`[SyncRoom realtime:${roomId}] ${status}`);
@@ -127,7 +141,7 @@ export function useRoomRealtime({ roomId, userId, enabled }: UseRoomRealtimeOpti
       void channel.untrack();
       void supabase.removeChannel(channel);
     };
-  }, [enabled, enrichMessage, pushLiveFlowMessage, roomId, userId]);
+  }, [applyMembers, enabled, enrichMessage, pushLiveFlowMessage, roomId, userId]);
 
   return { members, messages, setMessages, liveFlowMessages, pushLiveFlowMessage, presence, connectionState, notice };
 }
