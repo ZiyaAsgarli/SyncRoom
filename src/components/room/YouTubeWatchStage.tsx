@@ -6,7 +6,7 @@ import { useDriveVideoPlayer } from "../../hooks/useDriveVideoPlayer";
 import { useDriveMediaLifecycle, type DriveElementError } from "../../hooks/useDriveMediaLifecycle";
 import { shouldShowDriveConnect, useDriveSilentBootstrap } from "../../hooks/useDriveSilentBootstrap";
 import { usePlaybackRoomChannel } from "../../hooks/usePlaybackRoomChannel";
-import { useDelayedSingleClick, usePlayerControlsVisibility } from "../../hooks/usePlayerChrome";
+import { usePlayerControlsVisibility } from "../../hooks/usePlayerChrome";
 import { useYouTubePlayer } from "../../hooks/useYouTubePlayer";
 import { getDriveAuthSnapshot, requestDriveAccessToken, subscribeDriveAuth } from "../../services/driveAuth";
 import { fetchDriveFileMetadata } from "../../services/driveMetadata";
@@ -15,16 +15,18 @@ import type { Message, Profile, Room, RoomPlaybackState } from "../../types/data
 import type { PlaybackEvent } from "../../types/playback";
 import type { PlaybackAdapter } from "../../types/playbackAdapter";
 import { formatFileSize, playbackStateToMediaSource } from "../../utils/mediaSource";
-import { getDriveSurfaceAction, isAutoplayPolicyError } from "../../utils/drivePlaybackControls";
+import { isAutoplayPolicyError } from "../../utils/drivePlaybackControls";
 import { driveMediaErrorMessage } from "../../utils/driveMediaLifecycle";
 import { toggleElementFullscreen, unlockScreenOrientation, type ScreenOrientationController } from "../../utils/fullscreen";
 import { canControlPlayback } from "../../utils/playbackPermissions";
 import { calculateAuthoritativeTargetTime, createHeartbeatPayload, decideDriftCorrection, isBackwardHeartbeatUnsafe, issueRelativeAuthoritativeSeek } from "../../utils/playbackSync";
 import { createQueuedRemotePlay, getQueuedRemotePlayTarget, remotePlayBlockReason, shouldReplaceQueuedPlay, type QueuedRemotePlay } from "../../utils/remotePlay";
 import { parseYouTubeUrl } from "../../utils/youtube";
+import { formatPlaybackDuration, formatPlaybackTime } from "../../utils/playbackDisplay";
 import { Avatar } from "../ui/Avatar";
 import { Button } from "../ui/Button";
 import { FlowingMessages } from "./FlowingMessages";
+import { ReadOnlyPlaybackProgress } from "./ReadOnlyPlaybackProgress";
 
 interface YouTubeWatchStageProps {
   room: Room;
@@ -61,7 +63,7 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
   const [youTubeControlsMode, setYouTubeControlsMode] = useState(false);
   const [localVolume, setLocalVolume] = useState(1);
   const [localMuted, setLocalMuted] = useState(false);
-  const [displayTime, setDisplayTime] = useState({ currentTimeSeconds: 0, durationSeconds: 0 });
+  const [displayTime, setDisplayTime] = useState<{ currentTimeSeconds: number; durationSeconds: number | null }>({ currentTimeSeconds: 0, durationSeconds: null });
   const [seekDraft, setSeekDraft] = useState<number | null>(null);
   const [transientOverlay, setTransientOverlay] = useState<string | null>(null);
   const suppressRemoteUntil = useRef(0);
@@ -121,6 +123,7 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
     },
     onCanPlay: driveLifecycle.markPlayable,
     onStatusChange: (status) => handleLocalStatusChange(status),
+    onTimeChange: setDisplayTime,
     onError: (error) => void handleDriveMediaError(error)
   });
 
@@ -131,7 +134,6 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
   const activeDriveFileId = activeSource?.type === "google_drive" ? activeSource.fileId : null;
   const playbackStatus = playbackSnapshot?.playback_status;
   const { controlsVisible, showControls } = usePlayerControlsVisibility(isLocalPlaying);
-  const { scheduleSingleClick, cancelSingleClick } = useDelayedSingleClick();
 
   useEffect(() => {
     activePlayerRef.current = activePlayer;
@@ -161,19 +163,24 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
   }, []);
 
   useEffect(() => {
-    if (!controlsVisible || !activeSourceKey) return;
+    if (!controlsVisible || !activeSourceKey || activeSourceType === "google_drive") return;
     const updateDisplayTime = () => {
       const snapshot = activePlayerRef.current?.getSnapshot();
       if (!snapshot) return;
       setDisplayTime({
         currentTimeSeconds: snapshot.currentTimeSeconds,
-        durationSeconds: snapshot.durationSeconds ?? 0
+        durationSeconds: snapshot.durationSeconds
       });
     };
     updateDisplayTime();
     const timer = window.setInterval(updateDisplayTime, 500);
     return () => window.clearInterval(timer);
-  }, [activeSourceKey, controlsVisible, isLocalPlaying]);
+  }, [activeSourceKey, activeSourceType, controlsVisible, isLocalPlaying]);
+
+  useEffect(() => {
+    setDisplayTime({ currentTimeSeconds: 0, durationSeconds: null });
+    setSeekDraft(null);
+  }, [activeSourceKey]);
 
   useEffect(() => () => {
     if (transientTimerRef.current !== null) window.clearTimeout(transientTimerRef.current);
@@ -483,20 +490,6 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
     setSyncLabel("Paused");
   }
 
-  function toggleHostPlaybackFromVideo() {
-    const action = getDriveSurfaceAction({
-      isHost,
-      isPlaying: activePlayer.getSnapshot().playerState === 1,
-      playbackUnlocked: localReadyRef.current,
-      autoplayBlocked: remoteBlocked
-    });
-    if (action === "host-pause") {
-      void issueHostPause();
-    } else if (action === "host-play") {
-      void issueHostPlay();
-    }
-  }
-
   function showTransientOverlay(message: string): void {
     if (transientTimerRef.current !== null) window.clearTimeout(transientTimerRef.current);
     setTransientOverlay(message);
@@ -524,21 +517,15 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
   function handleVideoSurfaceClick(): void {
     if (youTubeControlsModeRef.current) return;
     showControls();
-    scheduleSingleClick(() => {
-      if (isHost) toggleHostPlaybackFromVideo();
-      else showTransientOverlay("Controlled by host");
-    });
   }
 
   function handleVideoSurfaceDoubleClick(): void {
-    cancelSingleClick();
     showControls();
     void togglePlayerFullscreen();
   }
 
   function openYouTubeControls(): void {
     if (activeSourceRef.current?.type !== "youtube") return;
-    cancelSingleClick();
     youTubeControlsModeRef.current = true;
     setYouTubeControlsMode(true);
   }
@@ -735,7 +722,7 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
   const showPlayerControls = Boolean(activeSource && activeReady && controlsVisible && !youTubeControlsMode);
   const needsSetupFrame = !activeSource || showDriveConnect;
   const visibleCurrentTime = seekDraft ?? displayTime.currentTimeSeconds;
-  const seekMaximum = Math.max(1, displayTime.durationSeconds);
+  const seekMaximum = Math.max(1, displayTime.durationSeconds ?? 0);
   const statusOverlay = playback.status === "Reconnecting" ? "Reconnecting..." : transientOverlay;
 
   return (
@@ -758,9 +745,9 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
             className="absolute inset-0 z-10 cursor-pointer bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[#76e4c4]"
             onClick={handleVideoSurfaceClick}
             onDoubleClick={handleVideoSurfaceDoubleClick}
-            aria-label={isHost ? (isLocalPlaying ? "Pause synchronized video" : "Play synchronized video") : "Show local video controls"}
+            aria-label="Show video controls"
           >
-            <span className="sr-only">{isHost ? "Play or pause synchronized video" : "Show local video controls"}</span>
+            <span className="sr-only">Show video controls</span>
           </button>
         ) : null}
         {showPlaybackUnlockOverlay ? (
@@ -873,15 +860,23 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
                   className="h-8 min-w-0 flex-1 touch-pan-y accent-[#76e4c4]"
                   aria-label="Seek synchronized video"
                 />
-                <span className="w-9 text-[11px] tabular-nums text-zinc-200 sm:w-10 sm:text-xs">{formatPlaybackTime(displayTime.durationSeconds)}</span>
+                <span className="w-9 text-[11px] tabular-nums text-zinc-200 sm:w-10 sm:text-xs">{formatPlaybackDuration(displayTime.durationSeconds)}</span>
               </div>
-            ) : null}
+            ) : (
+              <ReadOnlyPlaybackProgress
+                currentTimeSeconds={displayTime.currentTimeSeconds}
+                durationSeconds={displayTime.durationSeconds}
+              />
+            )}
             <div className="pointer-events-auto grid grid-cols-[1fr_auto_1fr] items-center gap-1">
               <div className="flex min-w-0 items-center justify-start gap-1">
                 <button
                   type="button"
                   className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-white/[0.06] bg-black/20 text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
-                  onClick={toggleLocalMute}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    toggleLocalMute();
+                  }}
                   aria-label={localMuted ? "Unmute video" : "Mute video"}
                 >
                   {localMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
@@ -917,7 +912,6 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
                     className="relative grid h-11 w-11 place-items-center rounded-lg border border-white/[0.06] bg-black/20 text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
                     onClick={(event) => {
                       event.stopPropagation();
-                      cancelSingleClick();
                       issueHostRelativeSeek(-10);
                     }}
                     aria-label="Rewind synchronized video 10 seconds"
@@ -932,7 +926,6 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
                     className="grid h-11 w-11 place-items-center rounded-lg border border-white/10 bg-white/10 text-white shadow-sm transition hover:bg-white/16 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
                     onClick={(event) => {
                       event.stopPropagation();
-                      cancelSingleClick();
                       void (isLocalPlaying ? issueHostPause() : issueHostPlay());
                     }}
                     aria-label={isLocalPlaying ? "Pause synchronized video" : "Play synchronized video"}
@@ -946,7 +939,6 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
                   className="relative grid h-11 w-11 place-items-center rounded-lg border border-white/[0.06] bg-black/20 text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
                   onClick={(event) => {
                     event.stopPropagation();
-                    cancelSingleClick();
                     issueHostRelativeSeek(10);
                   }}
                   aria-label="Forward synchronized video 10 seconds"
@@ -960,7 +952,10 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
                 <button
                   type="button"
                   className="grid h-11 w-11 place-items-center rounded-lg border border-white/[0.06] bg-black/20 text-white transition hover:bg-white/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#76e4c4]"
-                  onClick={() => void togglePlayerFullscreen()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void togglePlayerFullscreen();
+                  }}
                   aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
                 >
                   {isFullscreen ? <Minimize className="h-5 w-5" /> : <Maximize className="h-5 w-5" />}
@@ -979,14 +974,6 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
       ) : null}
     </section>
   );
-}
-
-function formatPlaybackTime(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
-  const wholeSeconds = Math.floor(seconds);
-  const minutes = Math.floor(wholeSeconds / 60);
-  const remainingSeconds = wholeSeconds % 60;
-  return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
 }
 
 function getScreenOrientation(): ScreenOrientationController | undefined {

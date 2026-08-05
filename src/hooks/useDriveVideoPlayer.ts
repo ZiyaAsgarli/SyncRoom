@@ -11,6 +11,7 @@ export function useDriveVideoPlayer(options: {
   onReady?: () => void;
   onCanPlay?: () => void;
   onStatusChange?: (status: PlaybackStatus) => void;
+  onTimeChange?: (time: { currentTimeSeconds: number; durationSeconds: number | null }) => void;
   onError?: (error: DriveElementError) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -30,11 +31,23 @@ export function useDriveVideoPlayer(options: {
     setError(null);
 
     const isCurrentGeneration = () => callbacksRef.current.generation === generation;
+    let lastEmittedCurrentTime = -1;
+    let lastEmittedDuration: number | null = null;
+    const emitTime = (force = false) => {
+      if (!isCurrentGeneration()) return;
+      const currentTimeSeconds = Number.isFinite(video.currentTime) && video.currentTime >= 0 ? video.currentTime : 0;
+      const durationSeconds = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : null;
+      if (!force && Math.abs(currentTimeSeconds - lastEmittedCurrentTime) < 0.45 && durationSeconds === lastEmittedDuration) return;
+      lastEmittedCurrentTime = currentTimeSeconds;
+      lastEmittedDuration = durationSeconds;
+      callbacksRef.current.onTimeChange?.({ currentTimeSeconds, durationSeconds });
+    };
     const loadingHandler = () => {
       if (isCurrentGeneration()) callbacksRef.current.onLoading?.();
     };
     const readyHandler = () => {
       if (!isCurrentGeneration()) return;
+      emitTime(true);
       setReady(true);
       callbacksRef.current.onReady?.();
     };
@@ -43,8 +56,13 @@ export function useDriveVideoPlayer(options: {
       callbacksRef.current.onCanPlay?.();
       callbacksRef.current.onStatusChange?.(statusFromHtmlVideo(video));
     };
+    const timeHandler = () => emitTime();
+    const durationHandler = () => emitTime(true);
     const statusHandler = () => {
-      if (isCurrentGeneration()) callbacksRef.current.onStatusChange?.(statusFromHtmlVideo(video));
+      if (isCurrentGeneration()) {
+        emitTime(true);
+        callbacksRef.current.onStatusChange?.(statusFromHtmlVideo(video));
+      }
     };
     const errorHandler = () => {
       if (!isCurrentGeneration()) return;
@@ -54,23 +72,29 @@ export function useDriveVideoPlayer(options: {
 
     video.addEventListener("loadstart", loadingHandler);
     video.addEventListener("loadedmetadata", readyHandler);
+    video.addEventListener("durationchange", durationHandler);
+    video.addEventListener("timeupdate", timeHandler);
     video.addEventListener("canplay", canPlayHandler);
     video.addEventListener("playing", statusHandler);
     video.addEventListener("pause", statusHandler);
     video.addEventListener("waiting", statusHandler);
     video.addEventListener("stalled", statusHandler);
     video.addEventListener("seeking", statusHandler);
+    video.addEventListener("seeked", statusHandler);
     video.addEventListener("ended", statusHandler);
     video.addEventListener("error", errorHandler);
     return () => {
       video.removeEventListener("loadstart", loadingHandler);
       video.removeEventListener("loadedmetadata", readyHandler);
+      video.removeEventListener("durationchange", durationHandler);
+      video.removeEventListener("timeupdate", timeHandler);
       video.removeEventListener("canplay", canPlayHandler);
       video.removeEventListener("playing", statusHandler);
       video.removeEventListener("pause", statusHandler);
       video.removeEventListener("waiting", statusHandler);
       video.removeEventListener("stalled", statusHandler);
       video.removeEventListener("seeking", statusHandler);
+      video.removeEventListener("seeked", statusHandler);
       video.removeEventListener("ended", statusHandler);
       video.removeEventListener("error", errorHandler);
     };

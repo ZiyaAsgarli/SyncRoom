@@ -45,6 +45,6 @@ describe("Drive restoration and relative seek architecture", () => {
   it("prevents seek controls from toggling the video surface click action", () => {
     const relativeSeekButtons = stageSource.slice(stageSource.indexOf('aria-label="Rewind synchronized video 10 seconds"') - 500, stageSource.indexOf('aria-label="Forward synchronized video 10 seconds"') + 100);
     expect(relativeSeekButtons.match(/event\.stopPropagation\(\)/g)).toHaveLength(3);
-    expect(relativeSeekButtons.match(/cancelSingleClick\(\)/g)).toHaveLength(3);
+    expect(relativeSeekButtons).not.toContain("cancelSingleClick()");
   });
 });

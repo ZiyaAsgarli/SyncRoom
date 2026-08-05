@@ -15,15 +15,18 @@ describe("Drive cinema playback architecture", () => {
     expect(stageSource).not.toContain("Toggle cinema mode");
   });
 
-  it("keeps host surface clicks on the existing authoritative handlers", () => {
-    expect(stageSource).toContain("scheduleSingleClick");
-    expect(stageSource).toContain("if (isHost) toggleHostPlaybackFromVideo()");
+  it("keeps Play and Pause on the explicit authoritative control only", () => {
+    const surfaceClick = stageSource.slice(stageSource.indexOf("function handleVideoSurfaceClick"), stageSource.indexOf("function handleVideoSurfaceDoubleClick"));
+    expect(surfaceClick).toContain("showControls()");
+    expect(surfaceClick).not.toContain("issueHostPlay");
+    expect(surfaceClick).not.toContain("issueHostPause");
+    expect(stageSource).toContain("void (isLocalPlaying ? issueHostPause() : issueHostPlay())");
     expect(stageSource).toContain('hostCommand("playback:play", "playing")');
     expect(stageSource).toContain('hostCommand("playback:pause", "paused")');
   });
 
   it("keeps guest interactions local and hides authoritative controls", () => {
-    expect(stageSource).toContain('else showTransientOverlay("Controlled by host")');
+    expect(stageSource).toContain("<ReadOnlyPlaybackProgress");
     expect(stageSource).toContain("{isHost ? (");
     expect(stageSource).toContain('aria-label="Local volume"');
     expect(stageSource).toContain('aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}');
@@ -36,10 +39,10 @@ describe("Drive cinema playback architecture", () => {
     expect(stageSource).not.toContain("document.documentElement.requestFullscreen");
   });
 
-  it("cancels pending Play/Pause before double-click fullscreen", () => {
-    expect(stageSource).toContain("cancelSingleClick()");
+  it("keeps double-click fullscreen independent from Play/Pause", () => {
     expect(stageSource).toContain("handleVideoSurfaceDoubleClick");
     expect(stageSource).toContain("void togglePlayerFullscreen()");
+    expect(stageSource).not.toContain("cancelSingleClick()");
   });
 
   it("keeps flowing messages in the fullscreen player stacking layer", () => {

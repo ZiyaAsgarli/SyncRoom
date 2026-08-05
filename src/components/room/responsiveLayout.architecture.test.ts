@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 const roomSource = readFileSync(resolve(process.cwd(), "src/pages/RoomPage.tsx"), "utf8");
 const chatSource = readFileSync(resolve(process.cwd(), "src/components/chat/ChatPanel.tsx"), "utf8");
 const stageSource = readFileSync(resolve(process.cwd(), "src/components/room/YouTubeWatchStage.tsx"), "utf8");
+const guestProgressSource = readFileSync(resolve(process.cwd(), "src/components/room/ReadOnlyPlaybackProgress.tsx"), "utf8");
 const presenceSource = readFileSync(resolve(process.cwd(), "src/components/room/PresenceList.tsx"), "utf8");
 const dashboardSource = readFileSync(resolve(process.cwd(), "src/pages/DashboardPage.tsx"), "utf8");
 const loginSource = readFileSync(resolve(process.cwd(), "src/pages/LoginPage.tsx"), "utf8");
@@ -49,6 +50,11 @@ describe("responsive product layout architecture", () => {
     expect(stageSource).toContain('aria-label="Rewind synchronized video 10 seconds"');
     expect(stageSource).toContain('aria-label="Forward synchronized video 10 seconds"');
     expect(stageSource.match(/\{isHost \? \(/g)?.length).toBeGreaterThanOrEqual(3);
+    expect(stageSource).toContain("<ReadOnlyPlaybackProgress");
+    expect(guestProgressSource).toContain("w-full");
+    expect(guestProgressSource).toContain("text-center");
+    expect(guestProgressSource).toContain("pointer-events-none");
+    expect(guestProgressSource).not.toContain('type="range"');
   });
 
   it("contains long room, participant, Drive, and message content", () => {
