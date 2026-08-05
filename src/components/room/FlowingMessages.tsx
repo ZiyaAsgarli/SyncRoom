@@ -67,7 +67,7 @@ export function FlowingMessages({ messages, enabled }: { messages: Message[]; en
           return (
             <motion.div
               key={key}
-              className="absolute left-0 flex max-w-[72%] items-center gap-1.5 rounded-full border border-white/10 bg-black/52 px-2 py-1.5 text-xs text-white shadow-xl backdrop-blur-md sm:max-w-[78%] sm:gap-2 sm:px-3 sm:py-2 sm:text-sm"
+              className="absolute left-0 flex max-w-[72%] items-center gap-1.5 rounded-full border border-white/12 bg-[#080c0d]/72 px-2 py-1.5 text-xs text-[var(--color-text)] shadow-[0_8px_28px_rgba(0,0,0,0.34)] backdrop-blur-md sm:max-w-[78%] sm:gap-2 sm:px-3 sm:py-2 sm:text-sm"
               style={{ top }}
               initial={reducedMotion ? { opacity: 0, x: 16 } : { x: "-105%", opacity: 0.92 }}
               animate={reducedMotion ? { opacity: [0, 1, 1, 0], x: 16 } : { x: "110vw", opacity: 0.96 }}
@@ -75,7 +75,7 @@ export function FlowingMessages({ messages, enabled }: { messages: Message[]; en
               transition={reducedMotion ? { duration: 2.1 } : { duration: 8.8, ease: "linear" }}
             >
               <Avatar src={profile?.avatar_url} name={senderName} className="h-5 w-5 text-[9px] sm:h-6 sm:w-6 sm:text-[10px]" />
-              <span className="font-semibold text-[#b7f7de]">{firstName(senderName)}</span>
+              <span className="font-semibold text-[#a8efd9]">{firstName(senderName)}</span>
               <span className="truncate">{message.body}</span>
             </motion.div>
           );

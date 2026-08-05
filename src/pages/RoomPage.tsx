@@ -87,10 +87,10 @@ export function RoomPage() {
   return (
     <AppShell>
       <main data-testid="room-layout" className="room-layout mx-auto flex min-h-[calc(100dvh-3.5rem-env(safe-area-inset-top))] max-w-[1600px] flex-col gap-3 overflow-x-clip px-0 pb-[env(safe-area-inset-bottom)] pt-2 sm:min-h-[calc(100dvh-4rem-env(safe-area-inset-top))] sm:gap-4 sm:px-4 sm:py-3 xl:max-h-[calc(100dvh-4rem-env(safe-area-inset-top))] xl:min-h-0 xl:px-6">
-        <header data-testid="room-header" className="mx-2 grid min-w-0 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 rounded-lg border border-white/12 bg-[#101113]/92 px-3.5 py-3 shadow-[0_12px_36px_rgba(0,0,0,0.18)] backdrop-blur-xl sm:mx-0 sm:rounded-xl sm:px-4 xl:grid-cols-[minmax(0,1fr)_auto_auto] xl:gap-x-5">
+        <header data-testid="room-header" className="surface-elevated mx-2 grid min-w-0 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 px-3.5 py-3 backdrop-blur-xl sm:mx-0 sm:px-4 xl:grid-cols-[minmax(0,1fr)_auto_auto] xl:gap-x-5">
           <div className="min-w-0">
-            <p className="flex items-center gap-1.5 text-[11px] text-zinc-500 sm:text-xs"><Shield className="h-3.5 w-3.5 shrink-0" />Private room</p>
-            <h1 className="truncate text-base font-semibold sm:text-lg" title={room.room_name}>{room.room_name}</h1>
+            <p className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--color-text-muted)] sm:text-xs"><Shield className="h-3.5 w-3.5 shrink-0 text-[var(--color-accent)]" />Private room</p>
+            <h1 className="truncate text-base font-semibold text-[var(--color-text)] sm:text-lg" title={room.room_name}>{room.room_name}</h1>
           </div>
           <div className="flex shrink-0 items-center gap-2 xl:col-start-3">
               <Button variant="secondary" className="h-11 w-11 p-0 md:w-auto md:px-3" onClick={() => void handleInviteCopy()} aria-label="Copy invitation link" title="Copy invitation link">
@@ -99,7 +99,7 @@ export function RoomPage() {
               </Button>
               <Button variant={isHost ? "danger" : "ghost"} className="h-11 w-11 p-0 md:w-auto md:px-3" onClick={() => void handleExit()} aria-label={isHost ? "End room" : "Leave room"} title={isHost ? "End room" : "Leave room"}>{isHost ? <PhoneOff className="h-4 w-4" /> : <DoorOpen className="h-4 w-4" />}<span className="hidden md:inline">{isHost ? "End" : "Leave"}</span></Button>
           </div>
-          <div className="col-span-2 mt-2 min-w-0 border-t border-white/8 pt-2 xl:col-span-1 xl:col-start-2 xl:row-start-1 xl:mt-0 xl:border-0 xl:pt-0">
+          <div className="col-span-2 mt-2 min-w-0 border-t border-[var(--color-border-subtle)] pt-2 xl:col-span-1 xl:col-start-2 xl:row-start-1 xl:mt-0 xl:border-0 xl:pt-0">
             <PresenceList members={realtime.members} presence={realtime.presence} />
           </div>
         </header>
@@ -108,9 +108,9 @@ export function RoomPage() {
           <section className="room-watch-column min-h-0 min-w-0">
             <YouTubeWatchStage room={room} currentProfile={profile} hostProfile={hostProfile} flowMessages={realtime.liveFlowMessages} flowingEnabled={flowingEnabled} />
 
-            {realtime.connectionState !== "online" ? <div className="mx-3 mt-3 rounded-lg border border-amber-300/20 bg-amber-300/8 px-3 py-2 text-sm text-amber-100 sm:mx-0">Connection: {realtime.connectionState}</div> : null}
+            {realtime.connectionState !== "online" ? <div className="mx-3 mt-3 rounded-lg border border-amber-300/20 bg-amber-300/8 px-3 py-2 text-sm text-amber-100 sm:mx-0">Reconnecting to the room...</div> : null}
 
-            {realtime.notice ? <div className="fixed left-1/2 top-[calc(4rem+env(safe-area-inset-top))] z-50 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-full border border-white/10 bg-[#101113] px-4 py-2 text-center text-sm text-zinc-200 shadow-xl">{realtime.notice}</div> : null}
+            {realtime.notice ? <div className="fixed left-1/2 top-[calc(4rem+env(safe-area-inset-top))] z-50 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-4 py-2 text-center text-sm text-[var(--color-text-secondary)] shadow-[var(--shadow-surface)]">{realtime.notice}</div> : null}
           </section>
 
           <ChatPanel

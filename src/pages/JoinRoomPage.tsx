@@ -73,19 +73,19 @@ export function JoinRoomPage() {
   return (
     <AppShell>
       <main className="mx-auto grid min-h-[calc(100dvh-3.5rem)] max-w-3xl place-items-center px-3 py-5 sm:px-4 sm:py-10">
-        <section className="w-full min-w-0 rounded-xl border border-white/10 bg-white/[0.055] p-4 text-white shadow-2xl sm:p-6">
-          <p className="text-sm uppercase tracking-[0.22em] text-zinc-500">Private invite {cleanCode}</p>
+        <section className="surface-elevated w-full min-w-0 p-4 text-[var(--color-text)] sm:p-6">
+          <p className="eyebrow">Private invite {cleanCode}</p>
           {room ? (
             <>
               <h1 className="mt-3 break-words text-2xl font-semibold sm:text-3xl">{room.room_name}</h1>
-              <div className="mt-5 flex items-center gap-3 rounded-lg border border-white/10 bg-black/20 p-4">
+              <div className="surface-interactive mt-5 flex items-center gap-3 rounded-lg p-4">
                 <Avatar src={host?.profiles?.avatar_url} name={host?.profiles?.full_name ?? "Host"} />
                 <div>
                   <p className="font-medium">{host?.profiles?.full_name ?? "Host"}</p>
-                  <p className="text-sm text-zinc-500">Host</p>
+                  <p className="text-sm text-[var(--color-text-muted)]">Host</p>
                 </div>
               </div>
-              <p className="mt-5 text-sm text-zinc-400">One approved guest can join the owner in this room. Room capacity is two people.</p>
+              <p className="mt-5 text-sm leading-relaxed text-[var(--color-text-secondary)]">One approved guest can join the owner in this room. Room capacity is two people.</p>
               {isHost ? <p className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/10 p-3 text-sm text-amber-100">You are the host for this invite. Opening the room will take you back inside.</p> : null}
               {!joinable ? <p className="mt-3 rounded-lg border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-200">This room is ended or already full.</p> : null}
               <Button onClick={isHost || alreadyJoined ? () => navigate(ROUTES.room(room.id)) : handleJoin} disabled={joining || !joinable} className="mt-6 w-full">

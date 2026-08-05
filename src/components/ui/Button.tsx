@@ -11,11 +11,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({ className, v
   <button
     ref={ref}
     className={cn(
-      "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#76e4c4] disabled:cursor-not-allowed disabled:opacity-50",
-      variant === "primary" && "bg-[#76e4c4] text-[#061110] hover:bg-[#a7f4dc]",
-      variant === "secondary" && "border border-white/12 bg-white/8 text-white hover:bg-white/12",
-      variant === "ghost" && "text-zinc-200 hover:bg-white/10",
-      variant === "danger" && "border border-red-400/30 bg-red-500/12 text-red-100 hover:bg-red-500/18",
+      "inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-control)] px-4 py-2 text-sm font-semibold transition-[color,background-color,border-color,box-shadow,transform] duration-150 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] disabled:cursor-not-allowed disabled:opacity-45 disabled:active:scale-100",
+      variant === "primary" && "bg-[var(--color-accent)] text-[#06110f] shadow-[0_8px_24px_rgba(39,124,103,0.16)] hover:bg-[var(--color-accent-hover)] active:bg-[var(--color-accent-active)]",
+      variant === "secondary" && "border border-[var(--color-border)] bg-white/[0.055] text-[var(--color-text)] shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] hover:border-white/20 hover:bg-white/[0.09]",
+      variant === "ghost" && "text-[var(--color-text-secondary)] hover:bg-white/[0.07] hover:text-[var(--color-text)]",
+      variant === "danger" && "border border-[#ef7f82]/30 bg-[#ef7f82]/10 text-[#ffc5c6] hover:border-[#ef7f82]/45 hover:bg-[#ef7f82]/16",
       className
     )}
     {...props}

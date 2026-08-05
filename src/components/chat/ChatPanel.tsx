@@ -82,14 +82,14 @@ export function ChatPanel({ room, messages, members, currentProfile, flowingEnab
   return (
     <aside
       data-testid="room-chat"
-      className="room-chat-panel flex h-[clamp(20rem,45dvh,34rem)] min-h-0 w-full flex-col overscroll-contain border-y border-white/12 bg-[#0e1011]/98 text-white shadow-[0_18px_50px_rgba(0,0,0,0.28)] sm:rounded-xl sm:border xl:h-auto xl:max-h-[calc(100dvh-10rem-env(safe-area-inset-top))] xl:self-stretch"
+      className="room-chat-panel surface-elevated flex h-[clamp(20rem,45dvh,34rem)] min-h-0 w-full flex-col overscroll-contain rounded-none border-x-0 text-[var(--color-text)] sm:rounded-[var(--radius-surface)] sm:border-x xl:h-auto xl:max-h-[calc(100dvh-10rem-env(safe-area-inset-top))] xl:self-stretch"
       aria-label="Room chat"
     >
-      <header className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4">
+      <header className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-[var(--color-border-subtle)] px-4">
         <div>
           <h2 className="font-semibold">Messages</h2>
-          <label className="mt-1 flex items-center gap-2 text-xs text-zinc-400">
-            <input type="checkbox" checked={flowingEnabled} onChange={(event) => onFlowingChange(event.target.checked)} className="accent-[#76e4c4]" />
+          <label className="mt-1 flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
+            <input type="checkbox" checked={flowingEnabled} onChange={(event) => onFlowingChange(event.target.checked)} className="accent-[var(--color-accent)]" />
             Flow over video
           </label>
         </div>
@@ -97,19 +97,19 @@ export function ChatPanel({ room, messages, members, currentProfile, flowingEnab
 
       <div ref={listRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3.5 py-4 sm:px-4">
         {messages.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-white/12 p-4 text-sm text-zinc-400">No messages yet.</div>
+          <div className="grid min-h-28 place-items-center rounded-lg border border-dashed border-[var(--color-border)] p-4 text-center text-sm text-[var(--color-text-muted)]">Your conversation will appear here.</div>
         ) : messages.map((message) => {
           const profile = resolveMessageProfile(message, members, currentProfile);
           const senderName = messageSenderName(profile);
           return (
-            <article key={message.id} className="group flex gap-3 rounded-lg px-1.5 py-1 transition-colors hover:bg-white/[0.035]">
+            <article key={message.id} className="group flex gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-white/[0.035]">
               <Avatar src={profile?.avatar_url} name={senderName} className="h-8 w-8 text-xs ring-1 ring-white/10" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-2">
-                  <span className="truncate text-sm font-semibold text-zinc-100">{senderName}</span>
-                  <time className="shrink-0 text-[11px] tabular-nums text-zinc-500">{formatMessageTime(message.created_at)}</time>
+                  <span className="truncate text-sm font-semibold text-[var(--color-text)]">{senderName}</span>
+                  <time className="shrink-0 text-[11px] tabular-nums text-[var(--color-text-muted)]">{formatMessageTime(message.created_at)}</time>
                 </div>
-                <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-300">{message.body}</p>
+                <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-[var(--color-text-secondary)]">{message.body}</p>
               </div>
             </article>
           );
@@ -129,7 +129,7 @@ export function ChatPanel({ room, messages, members, currentProfile, flowingEnab
       ) : null}
 
       <form
-        className="shrink-0 border-t border-white/10 bg-[#0e1011] p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
+        className="shrink-0 border-t border-[var(--color-border-subtle)] bg-black/12 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
         onSubmit={(event) => {
           event.preventDefault();
           void submit();
@@ -151,7 +151,7 @@ export function ChatPanel({ room, messages, members, currentProfile, flowingEnab
               }
             }}
             placeholder={ended ? "Room has ended" : "Message"}
-            className="min-h-11 min-w-0 flex-1 resize-none rounded-lg border border-white/12 bg-black/28 px-3 py-2 text-base text-white shadow-inner outline-none transition placeholder:text-zinc-600 focus:border-[#76e4c4]/70 focus:bg-black/34 sm:text-sm"
+            className="field-control min-h-11 min-w-0 flex-1 resize-none px-3 py-2 text-base shadow-inner sm:text-sm"
           />
           <div ref={emojiRef} className="relative">
             <Button
@@ -166,7 +166,7 @@ export function ChatPanel({ room, messages, members, currentProfile, flowingEnab
               <Smile className="h-4 w-4" />
             </Button>
             {emojiOpen ? (
-              <div role="dialog" aria-label="Emoji picker" className="absolute bottom-13 right-0 z-50 grid w-[min(14rem,calc(100vw-2rem))] grid-cols-5 gap-1 rounded-xl border border-white/10 bg-[#141517] p-2 shadow-2xl">
+              <div role="dialog" aria-label="Emoji picker" className="surface-elevated absolute bottom-13 right-0 z-50 grid w-[min(14rem,calc(100vw-2rem))] grid-cols-5 gap-1 p-2 shadow-[var(--shadow-elevated)]">
                 {FREQUENT_EMOJIS.map((emoji) => (
                   <button
                     key={emoji}

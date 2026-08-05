@@ -77,14 +77,14 @@ export function GuestAccessPanel({ ownerEmail }: { ownerEmail: string }) {
   }
 
   return (
-    <section className="mt-6 rounded-xl border border-white/10 bg-[#101113]/86 p-4 sm:p-5" aria-labelledby="guest-access-title">
+    <section className="surface-section mt-6 p-4 sm:p-5" aria-labelledby="guest-access-title">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <Users className="h-4 w-4 text-[#76e4c4]" aria-hidden="true" />
+            <Users className="h-4 w-4 text-[var(--color-accent)]" aria-hidden="true" />
             <h2 id="guest-access-title" className="font-semibold">Guest access</h2>
           </div>
-          <p className="mt-1 text-sm text-zinc-400">Approved Google accounts can join your private invitations.</p>
+          <p className="mt-1 text-sm text-[var(--color-text-muted)]">Approved Google accounts can join your private invitations.</p>
         </div>
         <Button variant="secondary" className="w-full sm:w-auto" onClick={() => { setError(null); setDialogOpen(true); }}>
           <Plus className="h-4 w-4" aria-hidden="true" />Add guest
@@ -94,14 +94,14 @@ export function GuestAccessPanel({ ownerEmail }: { ownerEmail: string }) {
       {notice ? <p role="status" className="mt-4 rounded-lg border border-[#76e4c4]/20 bg-[#76e4c4]/8 px-3 py-2 text-sm text-[#baf5e3]">{notice}</p> : null}
       {error && !dialogOpen ? <p role="alert" className="mt-4 rounded-lg border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">{error}</p> : null}
 
-      <div className="mt-4 divide-y divide-white/8 overflow-hidden rounded-lg border border-white/10">
+      <div className="mt-4 divide-y divide-[var(--color-border-subtle)] overflow-hidden rounded-lg border border-[var(--color-border-subtle)] bg-black/10">
         {loading ? <p className="p-4 text-sm text-zinc-400">Loading approved guests...</p> : null}
         {!loading && guests.length === 0 ? <p className="p-4 text-sm text-zinc-400">No guests are approved yet.</p> : null}
         {guests.map((guest) => (
-          <div key={guest.email} className="flex min-w-0 flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div key={guest.email} className="flex min-w-0 flex-col gap-3 p-3 transition-colors hover:bg-white/[0.025] sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <p className="break-all text-sm font-medium sm:truncate" title={guest.email}>{guest.email}</p>
-              <p className={guest.is_active ? "mt-1 text-xs text-[#76e4c4]" : "mt-1 text-xs text-zinc-500"}>
+              <p className={guest.is_active ? "mt-1 inline-flex rounded-full border border-[#76e4c4]/20 bg-[#76e4c4]/8 px-2 py-0.5 text-xs text-[#a8efd9]" : "mt-1 inline-flex rounded-full border border-white/8 bg-white/[0.035] px-2 py-0.5 text-xs text-[var(--color-text-muted)]"}>
                 {guest.is_active ? "Approved" : "Access removed"}
               </p>
             </div>
@@ -121,7 +121,7 @@ export function GuestAccessPanel({ ownerEmail }: { ownerEmail: string }) {
 
       <Dialog title="Add guest" open={dialogOpen} onClose={() => { if (!submitting) setDialogOpen(false); }}>
         <form onSubmit={handleAddGuest} noValidate>
-          <p className="text-sm text-zinc-400">Approve one Google account for private room invitations.</p>
+          <p className="text-sm text-[var(--color-text-secondary)]">Approve one Google account for private room invitations.</p>
           <label className="mt-5 block text-sm font-medium" htmlFor="guest-email">Google email</label>
           <input
             id="guest-email"
@@ -132,7 +132,7 @@ export function GuestAccessPanel({ ownerEmail }: { ownerEmail: string }) {
             onChange={(event) => { setEmail(event.target.value); setError(null); }}
             maxLength={254}
             placeholder="guest@example.com"
-            className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-black/24 px-3 text-white outline-none focus:border-[#76e4c4]/70"
+            className="field-control mt-2 h-11 w-full px-3"
           />
           {error ? <p role="alert" className="mt-3 text-sm text-red-300">{error}</p> : null}
           <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

@@ -3,5 +3,5 @@ export const PRODUCT = {
   logoText: "SyncRoom",
   tagline: "Just us, perfectly in sync.",
   description: "A private two-person watch room for shared video nights.",
-  privateNotice: "This is a private space for two invited accounts."
+  privateNotice: "Only accounts approved by the owner can enter."
 } as const;

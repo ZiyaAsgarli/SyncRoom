@@ -1,9 +1,10 @@
-import { Chrome } from "lucide-react";
+import { Chrome, LockKeyhole, PlayCircle, UsersRound } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { PRODUCT } from "../config/product";
 import { signInWithGoogle } from "../services/authService";
 import { Button } from "../components/ui/Button";
+import { Brand } from "../components/ui/Brand";
 
 export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
@@ -21,17 +22,22 @@ export function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-dvh place-items-center bg-[#070809] px-4 py-[max(1rem,env(safe-area-inset-top))] text-white sm:px-6 sm:py-12">
-      <motion.section initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md rounded-xl border border-white/10 bg-white/[0.055] p-5 shadow-2xl backdrop-blur-xl sm:rounded-2xl sm:p-7">
-        <p className="text-sm font-semibold tracking-[0.28em] text-[#76e4c4]">{PRODUCT.logoText}</p>
-        <h1 className="mt-4 text-2xl font-semibold sm:mt-5 sm:text-3xl">Private watch nights, kept simple.</h1>
-        <p className="mt-3 text-zinc-400">{PRODUCT.description}</p>
-        <Button onClick={handleLogin} disabled={loading} className="mt-8 w-full">
+    <main className="app-page grid min-h-dvh place-items-center px-4 py-[max(1rem,env(safe-area-inset-top))] sm:px-6 sm:py-12">
+      <motion.section initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28 }} className="surface-elevated w-full max-w-md p-5 sm:p-8">
+        <Brand />
+        <p className="mt-5 text-sm font-medium text-[var(--color-accent)]">{PRODUCT.tagline}</p>
+        <h1 className="mt-2 text-2xl font-semibold leading-tight text-[var(--color-text)] sm:text-3xl">Private watch nights, shared beautifully.</h1>
+        <p className="mt-3 leading-relaxed text-[var(--color-text-secondary)]">{PRODUCT.description}</p>
+        <div className="mt-6 grid grid-cols-2 gap-2 text-xs text-[var(--color-text-muted)]">
+          <span className="flex items-center gap-2"><UsersRound className="h-4 w-4 text-[var(--color-accent)]" />Two-person rooms</span>
+          <span className="flex items-center gap-2"><PlayCircle className="h-4 w-4 text-[var(--color-accent-secondary)]" />YouTube &amp; Drive</span>
+        </div>
+        <Button onClick={handleLogin} disabled={loading} className="mt-7 w-full">
           <Chrome className="h-5 w-5" />
           {loading ? "Opening Google..." : "Continue with Google"}
         </Button>
-        <p className="mt-4 text-center text-xs text-zinc-500">{PRODUCT.privateNotice}</p>
-        {error ? <p className="mt-4 rounded-lg border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-200">{error}</p> : null}
+        <p className="mt-4 flex items-center justify-center gap-1.5 text-center text-xs text-[var(--color-text-muted)]"><LockKeyhole className="h-3.5 w-3.5" />{PRODUCT.privateNotice}</p>
+        {error ? <p className="mt-4 rounded-lg border border-[#ef7f82]/25 bg-[#ef7f82]/10 p-3 text-sm text-[#ffc5c6]">{error}</p> : null}
       </motion.section>
     </main>
   );

@@ -1,17 +1,17 @@
 import { Link, useLocation } from "react-router-dom";
-import { PRODUCT } from "../config/product";
 import { ROUTES } from "../config/routes";
 import { Button } from "../components/ui/Button";
+import { Brand } from "../components/ui/Brand";
 
 export function AccessDeniedPage() {
   const location = useLocation();
   const revoked = Boolean((location.state as { revoked?: boolean } | null)?.revoked);
   return (
-    <main className="grid min-h-dvh place-items-center bg-[#070809] px-6 text-white">
-      <section className="max-w-md text-center">
-        <p className="text-sm font-semibold tracking-[0.28em] text-[#76e4c4]">{PRODUCT.logoText}</p>
+    <main className="app-page grid min-h-dvh place-items-center px-6">
+      <section className="surface-elevated max-w-md p-7 text-center">
+        <Brand className="justify-center" />
         <h1 className="mt-4 text-3xl font-semibold">Private access only</h1>
-        <p className="mt-3 text-zinc-400">
+        <p className="mt-3 leading-relaxed text-[var(--color-text-secondary)]">
           {revoked
             ? "Your access to this private SyncRoom has been removed."
             : "This Google account has not been approved by the owner, so it was signed out before private room data was opened."}

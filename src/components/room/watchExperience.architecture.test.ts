@@ -21,7 +21,8 @@ describe("viewport-aware watch experience architecture", () => {
 
   it("renders mobile chat inline after the player with its composer in normal flow", () => {
     expect(roomSource.indexOf("<YouTubeWatchStage")).toBeLessThan(roomSource.indexOf("<ChatPanel"));
-    expect(chatSource).toContain("room-chat-panel flex");
+    expect(chatSource).toContain("room-chat-panel");
+    expect(chatSource).toContain("flex h-[clamp(20rem,45dvh,34rem)]");
     expect(chatSource).toContain("h-[clamp(20rem,45dvh,34rem)]");
     expect(chatSource).toContain("<form");
     expect(chatSource).not.toContain("fixed inset-x-0 bottom-0");
