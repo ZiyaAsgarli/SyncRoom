@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { ROUTES } from "../config/routes";
 import { supabase } from "../lib/supabase";
 import { checkPrivateAccess, privateProfileSync, signOut } from "../services/authService";
+import { clearDriveToken } from "../services/driveAuth";
 import { isRevokedAccessError, isTransientProfileSyncError, shouldSignOutForProfileSyncError } from "../services/profileSyncCoordinator";
 import type { Profile } from "../types/database";
 import { handleAuthStateSynchronously, isStaleProfileResult } from "../utils/authLifecycle";
@@ -66,6 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           lastUserId.current = null;
           signedOutForDeniedUser.current = null;
           privateProfileSync.clearAll();
+          clearDriveToken();
           clearProfileState();
           setStatus("anonymous");
         },
@@ -90,8 +92,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const userChanged = lastUserId.current !== userId;
+    const previousUserId = lastUserId.current;
+    const userChanged = previousUserId !== userId;
     if (userChanged) {
+      if (previousUserId) clearDriveToken();
       authGeneration.current += 1;
       lastUserId.current = userId;
       signedOutForDeniedUser.current = null;
@@ -127,7 +131,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       if (import.meta.env.DEV) console.info("[SyncRoom auth] profile request failed");
-      console.error(error);
       setProfileLoading(false);
 
       if (shouldSignOutForProfileSyncError(error)) {
@@ -190,6 +193,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOutAndReturn = useCallback(async () => {
     if (userId) privateProfileSync.clearUser(userId);
+    clearDriveToken();
     setSigningOut(true);
     try {
       await signOut();

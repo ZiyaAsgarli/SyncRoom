@@ -6,6 +6,7 @@ const driveAuth = readFileSync(resolve(process.cwd(), "src/services/driveAuth.ts
 const driveServiceWorkerClient = readFileSync(resolve(process.cwd(), "src/services/driveServiceWorker.ts"), "utf8");
 const driveServiceWorker = readFileSync(resolve(process.cwd(), "public/syncroom-drive-sw.js"), "utf8");
 const playbackService = readFileSync(resolve(process.cwd(), "src/services/playbackService.ts"), "utf8");
+const drivePicker = readFileSync(resolve(process.cwd(), "src/services/drivePicker.ts"), "utf8");
 
 describe("Drive privacy architecture", () => {
   it("keeps Drive OAuth tokens out of persistent browser storage and media URLs", () => {
@@ -21,5 +22,9 @@ describe("Drive privacy architecture", () => {
     expect(playbackService).not.toContain("accessToken");
     expect(playbackService).not.toContain("Authorization");
     expect(playbackService).not.toContain("webContentLink");
+  });
+
+  it("binds Google Picker to the current browser origin", () => {
+    expect(drivePicker).toContain(".setOrigin(window.location.origin)");
   });
 });

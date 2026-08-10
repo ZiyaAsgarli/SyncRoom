@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PlaybackEvent } from "../types/playback";
-import { parsePlaybackEvent, shouldAcceptPlaybackEvent } from "./playbackEvents";
+import { isPlaybackEventAllowedOnChannel, parsePlaybackEvent, playbackChannelForEvent, shouldAcceptPlaybackEvent } from "./playbackEvents";
 
 const event: PlaybackEvent = {
   type: "playback:play",
@@ -55,6 +55,38 @@ describe("playback events", () => {
     const context = { seenEventIds: new Set<string>(), latestStateVersion: 3, hostUserId: event.senderUserId, localUserId: "00000000-0000-4000-8000-000000000004" };
     expect(shouldAcceptPlaybackEvent({ ...event, type: "playback:pause", eventId: "00000000-0000-4000-8000-000000000006" }, context)).toBe(true);
     expect(shouldAcceptPlaybackEvent({ ...event, type: "playback:seek", eventId: "00000000-0000-4000-8000-000000000007" }, context)).toBe(true);
+  });
+
+  it("separates host-authoritative traffic from member participant traffic", () => {
+    expect(playbackChannelForEvent("playback:play")).toBe("authoritative");
+    expect(playbackChannelForEvent("playback:heartbeat")).toBe("authoritative");
+    expect(playbackChannelForEvent("participant:ready")).toBe("participant");
+    expect(playbackChannelForEvent("playback:sync-request")).toBe("participant");
+    expect(isPlaybackEventAllowedOnChannel("playback:play", "participant")).toBe(false);
+    expect(isPlaybackEventAllowedOnChannel("participant:ready", "authoritative")).toBe(false);
+  });
+
+  it("allows a guest sync request without granting authoritative command permission", () => {
+    const guestId = "00000000-0000-4000-8000-000000000004";
+    const hostId = event.senderUserId;
+    const syncRequest = {
+      ...event,
+      type: "playback:sync-request" as const,
+      eventId: "00000000-0000-4000-8000-000000000011",
+      senderUserId: guestId
+    };
+    expect(shouldAcceptPlaybackEvent(syncRequest, {
+      seenEventIds: new Set(),
+      latestStateVersion: 3,
+      hostUserId: hostId,
+      localUserId: hostId
+    })).toBe(true);
+    expect(shouldAcceptPlaybackEvent({ ...syncRequest, type: "playback:seek" }, {
+      seenEventIds: new Set(),
+      latestStateVersion: 3,
+      hostUserId: hostId,
+      localUserId: "00000000-0000-4000-8000-000000000005"
+    })).toBe(false);
   });
 
   it("parses Drive source and heartbeat events without requiring a YouTube id", () => {

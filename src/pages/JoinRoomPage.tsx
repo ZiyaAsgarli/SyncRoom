@@ -11,6 +11,7 @@ import { getPrivateRoomInvite, joinPrivateRoom } from "../services/roomService";
 import type { Room, RoomMember } from "../types/database";
 import { normalizeInviteCode } from "../utils/inviteCode";
 import { canJoinRoom } from "../utils/roomStatus";
+import { userFacingError } from "../utils/userFacingError";
 
 export function JoinRoomPage() {
   const { inviteCode = "" } = useParams();
@@ -39,7 +40,7 @@ export function JoinRoomPage() {
         setRoom(invite.room);
         setMembers(invite.members);
       } catch (loadError) {
-        if (mounted) setError(loadError instanceof Error ? loadError.message : "Invitation could not be loaded.");
+        if (mounted) setError(userFacingError(loadError, "Invitation could not be loaded."));
       } finally {
         if (mounted) setLoading(false);
       }
@@ -57,7 +58,7 @@ export function JoinRoomPage() {
       const joined = await joinPrivateRoom(cleanCode);
       navigate(ROUTES.room(joined.id), { replace: true });
     } catch (joinError) {
-      setError(joinError instanceof Error ? joinError.message : "Room could not be joined.");
+      setError(userFacingError(joinError, "Room could not be joined."));
     } finally {
       setJoining(false);
     }

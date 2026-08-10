@@ -5,6 +5,7 @@ import { PRODUCT } from "../config/product";
 import { signInWithGoogle } from "../services/authService";
 import { Button } from "../components/ui/Button";
 import { Brand } from "../components/ui/Brand";
+import { userFacingError } from "../utils/userFacingError";
 
 export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
@@ -16,7 +17,7 @@ export function LoginPage() {
     try {
       await signInWithGoogle();
     } catch (loginError) {
-      setError(loginError instanceof Error ? loginError.message : "Google sign-in could not start.");
+      setError(userFacingError(loginError, "Google sign-in could not start."));
       setLoading(false);
     }
   }

@@ -4,7 +4,15 @@ import type { RoomPlaybackState } from "../types/database";
 import type { PlaybackEvent } from "../types/playback";
 import { getRoomPlaybackSnapshot, setRoomDriveSource, setRoomYouTubeSource, updateRoomPlaybackState } from "../services/playbackService";
 import type { DriveFileMetadata } from "../services/driveMetadata";
-import { createPlaybackEvent, getPlaybackEventRejectionReason, parsePlaybackEvent } from "../utils/playbackEvents";
+import {
+  createPlaybackEvent,
+  getPlaybackEventRejectionReason,
+  isAuthoritativePlaybackEvent,
+  isPlaybackEventAllowedOnChannel,
+  parsePlaybackEvent,
+  playbackChannelForEvent,
+  type PlaybackChannelKind
+} from "../utils/playbackEvents";
 import {
   createSnapshotPersistenceState,
   didExceedSafeSnapshotWriteRate,
@@ -26,7 +34,8 @@ export function usePlaybackRoomChannel({ roomId, localUserId, hostUserId, isHost
   const [snapshot, setSnapshot] = useState<RoomPlaybackState | null>(null);
   const [status, setStatus] = useState("Reconnecting");
   const [otherReady, setOtherReady] = useState(false);
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const authoritativeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const participantChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const seenEventIds = useRef<Set<string>>(new Set());
   const latestVersion = useRef(0);
   const lastEventAt = useRef<string | null>(null);
@@ -46,18 +55,20 @@ export function usePlaybackRoomChannel({ roomId, localUserId, hostUserId, isHost
       hasSnapshot.current = Boolean(next);
       latestVersion.current = next?.state_version ?? 0;
       snapshotPersistence.current = createSnapshotPersistenceState();
-    }).catch((error: unknown) => {
-      console.error("Playback snapshot load failed", error);
+    }).catch(() => {
+      if (import.meta.env.DEV) console.warn("[SyncRoom playback] snapshot load failed");
       setStatus("Snapshot unavailable");
     });
 
-    const channel = supabase.channel(`room:${roomId}:playback`);
-    channelRef.current = channel;
-    channel
-      .on("broadcast", { event: "playback" }, ({ payload }) => {
+    const channelStatuses = { authoritative: false, participant: false };
+    const receivePlaybackEvent = (channelKind: PlaybackChannelKind, payload: unknown) => {
         const event = parsePlaybackEvent(payload, roomId);
         if (!event) {
           if (import.meta.env.DEV) console.info("[SyncRoom playback] event rejected: malformed-or-wrong-room");
+          return;
+        }
+        if (!isPlaybackEventAllowedOnChannel(event.type, channelKind)) {
+          if (import.meta.env.DEV) console.info(`[SyncRoom playback] ${event.type} rejected: wrong-private-channel`);
           return;
         }
         const rejection = getPlaybackEventRejectionReason(event, { seenEventIds: seenEventIds.current, latestStateVersion: latestVersion.current, hostUserId, localUserId, latestEventSentAt: lastEventAt.current });
@@ -68,27 +79,53 @@ export function usePlaybackRoomChannel({ roomId, localUserId, hostUserId, isHost
         if (import.meta.env.DEV && event.type === "playback:play") console.info("[SyncRoom playback] play event received and host verified");
         seenEventIds.current.add(event.eventId);
         latestVersion.current = Math.max(latestVersion.current, event.stateVersion);
-        lastEventAt.current = event.sentAt;
+        if (isAuthoritativePlaybackEvent(event.type)) lastEventAt.current = event.sentAt;
         if (event.type === "participant:ready" && event.senderUserId !== localUserId) setOtherReady(true);
         if (event.type === "source:set") setOtherReady(false);
         remoteCallback.current(event);
-      })
-      .subscribe((nextStatus) => {
-        if (import.meta.env.DEV) console.info(`[SyncRoom playback:${roomId}] ${nextStatus}`);
-        if (nextStatus === "SUBSCRIBED") setStatus("In sync");
-        if (nextStatus === "CHANNEL_ERROR" || nextStatus === "TIMED_OUT") {
-          setStatus("Reconnecting");
-          console.error(`Playback channel ${nextStatus.toLowerCase()} for room ${roomId}`);
+    };
+    const handleStatus = (channelKind: PlaybackChannelKind, nextStatus: string) => {
+        if (import.meta.env.DEV) console.info(`[SyncRoom playback:${roomId}:${channelKind}] ${nextStatus}`);
+        if (nextStatus === "SUBSCRIBED") {
+          channelStatuses[channelKind] = true;
+          if (channelStatuses.authoritative && channelStatuses.participant) setStatus("In sync");
         }
-        if (nextStatus === "CLOSED") setStatus("Reconnecting");
-      });
+        if (nextStatus === "CHANNEL_ERROR" || nextStatus === "TIMED_OUT") {
+          channelStatuses[channelKind] = false;
+          setStatus("Reconnecting");
+          if (import.meta.env.DEV) console.warn(`[SyncRoom playback:${channelKind}] channel ${nextStatus.toLowerCase()}`);
+        }
+        if (nextStatus === "CLOSED") {
+          channelStatuses[channelKind] = false;
+          setStatus("Reconnecting");
+        }
+    };
+
+    const authoritativeChannel = supabase.channel(`room:${roomId}:playback`, { config: { private: true } });
+    const participantChannel = supabase.channel(`room:${roomId}:participant`, { config: { private: true } });
+    authoritativeChannelRef.current = authoritativeChannel;
+    participantChannelRef.current = participantChannel;
+    authoritativeChannel.on("broadcast", { event: "playback" }, ({ payload }) => receivePlaybackEvent("authoritative", payload));
+    participantChannel.on("broadcast", { event: "playback" }, ({ payload }) => receivePlaybackEvent("participant", payload));
+
+    void supabase.realtime.setAuth().then(() => {
+      if (!mounted) return;
+      authoritativeChannel.subscribe((nextStatus) => handleStatus("authoritative", nextStatus));
+      participantChannel.subscribe((nextStatus) => handleStatus("participant", nextStatus));
+    }).catch(() => {
+      if (!mounted) return;
+      setStatus("Reconnecting");
+      if (import.meta.env.DEV) console.warn("[SyncRoom playback] private channel authentication failed");
+    });
 
     return () => {
       mounted = false;
-      channelRef.current = null;
+      authoritativeChannelRef.current = null;
+      participantChannelRef.current = null;
       hasSnapshot.current = false;
       snapshotPersistence.current = createSnapshotPersistenceState();
-      void supabase.removeChannel(channel);
+      void supabase.removeChannel(authoritativeChannel);
+      void supabase.removeChannel(participantChannel);
     };
   }, [hostUserId, localUserId, roomId]);
 
@@ -96,7 +133,10 @@ export function usePlaybackRoomChannel({ roomId, localUserId, hostUserId, isHost
     const fullEvent = createPlaybackEvent({ ...event, roomId, senderUserId: localUserId });
     seenEventIds.current.add(fullEvent.eventId);
     latestVersion.current = Math.max(latestVersion.current, fullEvent.stateVersion);
-    await channelRef.current?.send({ type: "broadcast", event: "playback", payload: fullEvent });
+    const channel = playbackChannelForEvent(fullEvent.type) === "authoritative"
+      ? authoritativeChannelRef.current
+      : participantChannelRef.current;
+    await channel?.send({ type: "broadcast", event: "playback", payload: fullEvent });
     return fullEvent;
   }, [localUserId, roomId]);
 

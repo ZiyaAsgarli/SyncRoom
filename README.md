@@ -37,7 +37,7 @@ Do not put a Google OAuth Client Secret in any frontend environment file.
 ## Supabase Setup
 
 1. Create a Supabase project on the Free plan.
-2. Run the migrations in filename order. Existing deployments should apply `supabase/migrations/202607280001_owner_managed_guest_access.sql` after the earlier playback migrations.
+2. Run the migrations in filename order. Existing deployments must apply `supabase/migrations/202608070001_private_room_realtime_authorization.sql` after the owner-managed access migration before deploying the matching private-channel frontend.
 3. For a fresh deployment, seed the permanent owner and optionally one initial guest using the internal compatibility role `friend`:
 
 ```sql
@@ -48,7 +48,7 @@ values
 ```
 
 4. The owner can then manage additional guest accounts from the **Guest access** dashboard section. The migration keeps the existing `friend` row active and uses that enum value internally for all guests to preserve room and message history.
-5. Enable Realtime for `messages` and `room_members` in Supabase if it is not already enabled for those tables.
+5. Enable Realtime for `messages` and `room_members` in Supabase if it is not already enabled for those tables. The latest migration also authorizes private Presence and Broadcast topics for active room members; only the host may send on the authoritative playback topic.
 
 ### Owner-managed guest access
 
@@ -99,7 +99,7 @@ In Google Cloud Console:
 
 1. Create an OAuth consent screen.
 2. Keep the app in Testing mode.
-3. Add only the owner and friend Google accounts as test users.
+3. Add the owner and every currently approved guest Google account as test users.
 4. Create an OAuth web client.
 5. Add Supabase's Google callback URL from Supabase Auth provider settings.
 
@@ -131,6 +131,8 @@ npm run test
 npm run build
 ```
 
+The production release checklist is in `docs/V1_PRODUCTION_QA.md`.
+
 ## Vercel Deployment
 
 1. Import this repository into Vercel.
@@ -139,6 +141,8 @@ npm run build
    - Output directory: `dist`
 3. Add `VITE_APP_NAME`, `VITE_SUPABASE_URL`, and `VITE_SUPABASE_ANON_KEY`.
 4. Add the final Vercel URL to Supabase Auth redirect URLs and Google OAuth authorized origins/redirect configuration.
+
+The production response also sets low-risk `nosniff`, referrer, permissions, and anti-framing headers. A Content Security Policy is intentionally deferred until its Google OAuth, Picker, YouTube, Supabase, and Drive endpoint allowlists can be exercised end to end.
 
 ## Security and RLS Overview
 
@@ -150,6 +154,7 @@ npm run build
 - Message inserts require `user_id = auth.uid()`.
 - Ended rooms reject new joins.
 - Host-only room ending is enforced by `end_private_room`.
+- Room Presence and Broadcast use private Realtime channels. Active membership is required to receive or send; the authoritative playback topic additionally requires host membership.
 
 ## Completed in Step 1
 
@@ -214,6 +219,8 @@ The frontend now subscribes to:
 - filter: `room_id=eq.<current-room-id>`
 
 The subscription is created only after the room and authenticated profile are ready, logs status in development, handles `SUBSCRIBED`, `CHANNEL_ERROR`, `TIMED_OUT`, and `CLOSED`, and removes the channel on cleanup.
+
+Presence and playback Broadcast channels are private. Playback uses separate topics for host-authoritative commands and participant readiness/recovery traffic so a guest cannot publish a forged Play, Pause, Seek, Rate, source, or heartbeat command on the authoritative topic.
 
 ## Flowing Messages
 

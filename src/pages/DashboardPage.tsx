@@ -14,6 +14,7 @@ import type { Room } from "../types/database";
 import { canManageGuestAccess } from "../utils/guestAccess";
 import { firstName } from "../utils/names";
 import { roomStatusLabel } from "../utils/roomStatus";
+import { userFacingError } from "../utils/userFacingError";
 
 export function DashboardPage() {
   const { profile } = useAuth();
@@ -27,7 +28,7 @@ export function DashboardPage() {
   useEffect(() => {
     if (!profile) return;
     void getMyRooms(profile.user_id).then(setRooms)
-      .catch((loadError: unknown) => setError(loadError instanceof Error ? loadError.message : "Dashboard could not load."));
+      .catch((loadError: unknown) => setError(userFacingError(loadError, "Dashboard could not load.")));
   }, [profile]);
 
   const activeRoom = useMemo(() => rooms.find((room) => room.status !== "ended"), [rooms]);
@@ -43,7 +44,7 @@ export function DashboardPage() {
       await navigator.clipboard?.writeText(invite).catch(() => undefined);
       navigate(ROUTES.room(room.id));
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : "Room could not be created.");
+      setError(userFacingError(createError, "Room could not be created."));
     } finally {
       setCreating(false);
     }

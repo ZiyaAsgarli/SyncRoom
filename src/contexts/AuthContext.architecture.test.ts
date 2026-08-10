@@ -28,4 +28,9 @@ describe("AuthContext architecture", () => {
     expect(source).toContain('addEventListener("visibilitychange"');
     expect(source).toContain("denyAndSignOut(userId, isRevokedAccessError(error))");
   });
+
+  it("clears memory-only Drive authorization on sign-out and account changes", () => {
+    expect(source).toContain('import { clearDriveToken } from "../services/driveAuth"');
+    expect(source.match(/clearDriveToken\(\)/g)?.length).toBeGreaterThanOrEqual(3);
+  });
 });

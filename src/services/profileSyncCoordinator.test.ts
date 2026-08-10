@@ -105,6 +105,7 @@ describe("profile sync coordinator", () => {
   it("classifies timeout as transient and unauthorized separately", () => {
     expect(isTransientProfileSyncError({ code: "PGRST003", status: 504 })).toBe(true);
     expect(isUnauthorizedProfileError({ code: "42501", message: "not invited" })).toBe(true);
+    expect(isUnauthorizedProfileError({ code: "42501", message: "A protected operation was denied" })).toBe(false);
     expect(isUnauthorizedProfileError({ code: "PGRST003", status: 504 })).toBe(false);
   });
 

@@ -19,7 +19,7 @@ const DEFAULT_TIMEOUT_MS = 12_000;
 
 export function isUnauthorizedProfileError(error: unknown): boolean {
   const candidate = toErrorLike(error);
-  return candidate.code === "42501" || /not invited|not authorized|unauthorized/i.test(candidate.message ?? "");
+  return /not invited|not authorized|unauthorized|access.+removed|access.+inactive|revoked/i.test(candidate.message ?? "");
 }
 
 export function isTransientProfileSyncError(error: unknown): boolean {

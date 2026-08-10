@@ -1,5 +1,5 @@
 import { Check, Copy, DoorOpen, PhoneOff, Shield } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ChatPanel } from "../components/chat/ChatPanel";
 import { AppShell } from "../components/layout/AppShell";
@@ -14,6 +14,7 @@ import { endPrivateRoom, getRoomById, leavePrivateRoom, sendMessage } from "../s
 import type { Room } from "../types/database";
 import { copyStatusLabel, copyTextWithFallback, type CopyStatus } from "../utils/copyFeedback";
 import { createOptimisticMessage, mergeConfirmedMessage, removeOptimisticMessage } from "../utils/chatMessages";
+import { userFacingError } from "../utils/userFacingError";
 
 export function RoomPage() {
   const { roomId = "" } = useParams();
@@ -24,6 +25,7 @@ export function RoomPage() {
   const [error, setError] = useState<string | null>(null);
   const [flowingEnabled, setFlowingEnabled] = useState(true);
   const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
+  const copyResetTimerRef = useRef<number | null>(null);
   const realtime = useRoomRealtime({ roomId: room?.id ?? null, userId: profile?.user_id ?? null, currentProfile: profile, enabled: Boolean(room && profile) });
 
   useEffect(() => {
@@ -32,7 +34,7 @@ export function RoomPage() {
       if (!mounted) return;
       setRoom(found);
     }).catch((loadError: unknown) => {
-      if (mounted) setError(loadError instanceof Error ? loadError.message : "Room could not be loaded.");
+      if (mounted) setError(userFacingError(loadError, "Room could not be loaded."));
     }).finally(() => {
       if (mounted) setLoading(false);
     });
@@ -40,6 +42,10 @@ export function RoomPage() {
       mounted = false;
     };
   }, [roomId]);
+
+  useEffect(() => () => {
+    if (copyResetTimerRef.current !== null) window.clearTimeout(copyResetTimerRef.current);
+  }, []);
 
   const isHost = room?.host_user_id === profile?.user_id;
   const inviteLink = useMemo(() => room ? `${window.location.origin}${ROUTES.join(room.invite_code)}` : "", [room]);
@@ -66,7 +72,11 @@ export function RoomPage() {
     if (!inviteLink) return;
     const copied = await copyTextWithFallback(inviteLink);
     setCopyStatus(copied ? "copied" : "failed");
-    window.setTimeout(() => setCopyStatus("idle"), 1800);
+    if (copyResetTimerRef.current !== null) window.clearTimeout(copyResetTimerRef.current);
+    copyResetTimerRef.current = window.setTimeout(() => {
+      setCopyStatus("idle");
+      copyResetTimerRef.current = null;
+    }, 1800);
   }
 
   async function handleExit() {

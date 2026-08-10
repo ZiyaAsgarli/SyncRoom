@@ -237,14 +237,21 @@ function logDriveSession(state: string): void {
 function loadGoogleIdentityServices(): Promise<void> {
   if (window.google?.accounts?.oauth2) return Promise.resolve();
   if (gisPromise) return gisPromise;
-  gisPromise = new Promise((resolve, reject) => {
+  const pending = new Promise<void>((resolve, reject) => {
     const script = document.createElement("script");
     script.src = "https://accounts.google.com/gsi/client";
     script.async = true;
     script.defer = true;
     script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Google Identity Services could not load."));
+    script.onerror = () => {
+      script.remove();
+      reject(new Error("Google Identity Services could not load."));
+    };
     document.head.appendChild(script);
+  });
+  gisPromise = pending.catch((error: unknown) => {
+    gisPromise = null;
+    throw error;
   });
   return gisPromise;
 }

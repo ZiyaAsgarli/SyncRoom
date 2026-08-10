@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { addAllowedGuest, listAllowedGuests, setAllowedGuestActive } from "../../services/guestAccessService";
 import type { AllowedGuest } from "../../types/database";
 import { validateGuestEmail } from "../../utils/guestAccess";
+import { userFacingError } from "../../utils/userFacingError";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
 
@@ -22,7 +23,7 @@ export function GuestAccessPanel({ ownerEmail }: { ownerEmail: string }) {
     try {
       setGuests(await listAllowedGuests());
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Guest access could not be loaded.");
+      setError(userFacingError(loadError, "Guest access could not be loaded."));
     } finally {
       setLoading(false);
     }
@@ -56,7 +57,7 @@ export function GuestAccessPanel({ ownerEmail }: { ownerEmail: string }) {
       setDialogOpen(false);
       setNotice("Guest access added.");
     } catch (addError) {
-      setError(addError instanceof Error ? addError.message : "Guest access could not be added.");
+      setError(userFacingError(addError, "Guest access could not be added."));
     } finally {
       setSubmitting(false);
     }
@@ -70,7 +71,7 @@ export function GuestAccessPanel({ ownerEmail }: { ownerEmail: string }) {
       upsertGuest(updated);
       setNotice(updated.is_active ? "Guest access restored." : "Guest access removed.");
     } catch (changeError) {
-      setError(changeError instanceof Error ? changeError.message : "Guest access could not be updated.");
+      setError(userFacingError(changeError, "Guest access could not be updated."));
     } finally {
       setChangingEmail(null);
     }

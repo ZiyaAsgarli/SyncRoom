@@ -25,6 +25,7 @@ export function useRoomRealtime({ roomId, userId, currentProfile, enabled }: Use
   const flowedSignatures = useRef<Set<string>>(new Set());
   const membersRef = useRef<RoomMember[]>([]);
   const currentProfileRef = useRef<Profile | null>(currentProfile);
+  const noticeTimerRef = useRef<number | null>(null);
   currentProfileRef.current = currentProfile;
 
   const enrichMessage = useCallback((message: Message): Message => {
@@ -58,6 +59,16 @@ export function useRoomRealtime({ roomId, userId, currentProfile, enabled }: Use
     membersRef.current = [];
     setMembers([]);
 
+    const showNotice = (message: string) => {
+      if (!mounted) return;
+      if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current);
+      setNotice(message);
+      noticeTimerRef.current = window.setTimeout(() => {
+        if (mounted) setNotice(null);
+        noticeTimerRef.current = null;
+      }, 2800);
+    };
+
     void Promise.all([getRoomMembers(roomId), getMessages(roomId)]).then(([nextMembers, nextMessages]) => {
       if (!mounted) return;
       membersRef.current = nextMembers;
@@ -69,11 +80,11 @@ export function useRoomRealtime({ roomId, userId, currentProfile, enabled }: Use
       ));
       setLiveFlowMessages((current) => hydrateMessageProfiles(current, nextMembers, currentProfileRef.current));
       baselineIds.current = new Set(nextMessages.map((message) => message.id));
-    }).catch((error: unknown) => {
-      console.error("Room realtime initial load failed", error);
+    }).catch(() => {
+      if (import.meta.env.DEV) console.warn("[SyncRoom realtime] initial room data load failed");
     });
 
-    const channel = supabase.channel(`room:${roomId}`, { config: { presence: { key: userId } } });
+    const channel = supabase.channel(`room:${roomId}`, { config: { private: true, presence: { key: userId } } });
     channel
       .on("presence", { event: "sync" }, () => {
         const state = channel.presenceState<PresenceMeta>();
@@ -86,21 +97,15 @@ export function useRoomRealtime({ roomId, userId, currentProfile, enabled }: Use
         setConnectionState("online");
       })
       .on("presence", { event: "join" }, ({ key }) => {
-        if (key !== userId) {
-          setNotice("Your friend entered the room.");
-          window.setTimeout(() => setNotice(null), 2800);
-        }
+        if (key !== userId) showNotice("Your friend entered the room.");
       })
       .on("presence", { event: "leave" }, ({ key }) => {
-        if (key !== userId) {
-          setNotice("Your friend left the room.");
-          window.setTimeout(() => setNotice(null), 2800);
-        }
+        if (key !== userId) showNotice("Your friend left the room.");
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `room_id=eq.${roomId}` }, (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
         const inserted = parseMessageInsertPayload(payload, roomId);
         if (!inserted) {
-          console.error("Ignored malformed or wrong-room message realtime payload", payload);
+          if (import.meta.env.DEV) console.warn("[SyncRoom realtime] malformed or wrong-room message ignored");
           return;
         }
         const live = shouldFlowLiveMessage(inserted, baselineIds.current, subscriptionReady.current);
@@ -109,9 +114,15 @@ export function useRoomRealtime({ roomId, userId, currentProfile, enabled }: Use
         if (inserted.user_id !== userId) setConnectionState("online");
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "room_members", filter: `room_id=eq.${roomId}` }, () => {
-        void getRoomMembers(roomId).then(applyMembers);
-      })
-      .subscribe(async (status) => {
+        void getRoomMembers(roomId).then((nextMembers) => {
+          if (mounted) applyMembers(nextMembers);
+        }).catch(() => {
+          if (import.meta.env.DEV) console.warn("[SyncRoom realtime] membership refresh failed");
+        });
+      });
+
+    const subscribe = () => channel.subscribe(async (status) => {
+        if (!mounted) return;
         if (import.meta.env.DEV) console.info(`[SyncRoom realtime:${roomId}] ${status}`);
         if (status === "SUBSCRIBED") {
           subscriptionReady.current = true;
@@ -120,12 +131,20 @@ export function useRoomRealtime({ roomId, userId, currentProfile, enabled }: Use
         } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
           subscriptionReady.current = false;
           setConnectionState("reconnecting");
-          console.error(`Room realtime channel ${status.toLowerCase()} for room ${roomId}`);
+          if (import.meta.env.DEV) console.warn(`[SyncRoom realtime] channel ${status.toLowerCase()}`);
         } else if (status === "CLOSED") {
           subscriptionReady.current = false;
           setConnectionState("left");
         }
       });
+
+    void supabase.realtime.setAuth().then(() => {
+      if (mounted) subscribe();
+    }).catch(() => {
+      if (!mounted) return;
+      setConnectionState("reconnecting");
+      if (import.meta.env.DEV) console.warn("[SyncRoom realtime] private channel authentication failed");
+    });
 
     const away = () => {
       const nextState: PresenceState = document.hidden ? "away" : "online";
@@ -137,6 +156,10 @@ export function useRoomRealtime({ roomId, userId, currentProfile, enabled }: Use
     return () => {
       mounted = false;
       subscriptionReady.current = false;
+      if (noticeTimerRef.current !== null) {
+        window.clearTimeout(noticeTimerRef.current);
+        noticeTimerRef.current = null;
+      }
       document.removeEventListener("visibilitychange", away);
       void channel.untrack();
       void supabase.removeChannel(channel);

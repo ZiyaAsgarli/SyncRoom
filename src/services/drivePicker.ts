@@ -24,6 +24,7 @@ interface PickerBuilder {
   setOAuthToken: (token: string) => PickerBuilder;
   setDeveloperKey: (key: string) => PickerBuilder;
   setAppId: (appId: string) => PickerBuilder;
+  setOrigin: (origin: string) => PickerBuilder;
   setCallback: (callback: (response: PickerResponse) => void) => PickerBuilder;
   build: () => { setVisible: (visible: boolean) => void };
 }
@@ -59,6 +60,7 @@ export async function pickDriveVideo(accessToken: string, expectedFileId?: strin
       .setOAuthToken(accessToken)
       .setDeveloperKey(env.pickerApiKey)
       .setAppId(env.appId)
+      .setOrigin(window.location.origin)
       .setCallback((response) => {
         if (response.action === pickerApi.Action.CANCEL) {
           reject(new Error("Drive picker was closed."));
@@ -84,7 +86,7 @@ export async function pickDriveVideo(accessToken: string, expectedFileId?: strin
 function loadPickerApi(): Promise<void> {
   if (window.google?.picker) return Promise.resolve();
   if (pickerPromise) return pickerPromise;
-  pickerPromise = new Promise((resolve, reject) => {
+  const pending = new Promise<void>((resolve, reject) => {
     const load = () => {
       if (!window.gapi?.load) {
         reject(new Error("Google API loader is unavailable."));
@@ -101,8 +103,15 @@ function loadPickerApi(): Promise<void> {
     script.src = "https://apis.google.com/js/api.js";
     script.async = true;
     script.onload = load;
-    script.onerror = () => reject(new Error("Google Picker API could not load."));
+    script.onerror = () => {
+      script.remove();
+      reject(new Error("Google Picker API could not load."));
+    };
     document.head.appendChild(script);
+  });
+  pickerPromise = pending.catch((error: unknown) => {
+    pickerPromise = null;
+    throw error;
   });
   return pickerPromise;
 }

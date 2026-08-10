@@ -8,7 +8,7 @@ function loadYouTubeIframeApi(): Promise<YouTubeNamespace> {
   if (window.YT?.Player) return Promise.resolve(window.YT);
   if (iframeApiPromise) return iframeApiPromise;
 
-  iframeApiPromise = new Promise((resolve, reject) => {
+  const pending = new Promise<YouTubeNamespace>((resolve, reject) => {
     const previous = window.onYouTubeIframeAPIReady;
     window.onYouTubeIframeAPIReady = () => {
       previous?.();
@@ -18,8 +18,17 @@ function loadYouTubeIframeApi(): Promise<YouTubeNamespace> {
     const script = document.createElement("script");
     script.src = "https://www.youtube.com/iframe_api";
     script.async = true;
-    script.onerror = () => reject(new Error("Could not load YouTube IFrame API."));
+    script.onerror = () => {
+      window.onYouTubeIframeAPIReady = previous;
+      script.remove();
+      reject(new Error("Could not load YouTube IFrame API."));
+    };
     document.head.appendChild(script);
+  });
+
+  iframeApiPromise = pending.catch((error: unknown) => {
+    iframeApiPromise = null;
+    throw error;
   });
 
   return iframeApiPromise;

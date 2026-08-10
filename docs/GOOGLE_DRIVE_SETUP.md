@@ -24,7 +24,7 @@ Do not remove the existing Supabase redirect URI used by Supabase Auth.
 
 Keep the OAuth app Publishing Status as `Testing`.
 
-Keep only the two private Google accounts as OAuth test users.
+Add the owner and every currently approved guest as OAuth test users while the app remains in Testing mode.
 
 SyncRoom requests only this Drive scope during the explicit Drive flow:
 
@@ -38,14 +38,21 @@ Do not add the OAuth Client Secret to frontend environment files or repository f
 
 Create a Google API key for Picker.
 
-Recommended restrictions:
+The key is a public browser identifier, not a client secret. It must always be API-restricted to Google Picker API only. SyncRoom now passes `window.location.origin` to `PickerBuilder.setOrigin()`.
+
+Current validated v1 configuration:
+
+- Application restriction: None
+- API restriction: Google Picker API only
+
+Post-release hardening to retest in Google Cloud before enforcement:
 
 - Application restriction: HTTP referrers
 - Local referrer: `http://localhost:5173/*`
-- Later Vercel referrer: `https://<vercel-domain>.vercel.app/*`
+- Production referrer: `https://<vercel-domain>.vercel.app/*`
 - API restriction: Google Picker API
 
-If Google requires Drive API access for Picker metadata in your project, add only the exact API restriction Google reports.
+Previous referrer-restricted testing returned "The API developer key is invalid", so do not change the working production restriction without a two-browser Picker test. Never place a private credential in the browser as a substitute.
 
 ## Project Number
 
@@ -69,6 +76,6 @@ GOOGLE_CLIENT_SECRET=...
 
 ## Drive File Sharing
 
-The host must manually share the video file with the friend in Google Drive as a Viewer.
+The host must manually share the video file with the intended guest in Google Drive as a Viewer.
 
 SyncRoom does not change Drive permissions, does not call `permissions.create`, and does not require public files or "Anyone with the link" sharing.

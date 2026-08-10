@@ -19,6 +19,7 @@ export function FlowingMessages({ messages, enabled }: { messages: Message[]; en
   const laneAvailableAt = useRef<number[]>([]);
   const seen = useRef<Set<string>>(new Set());
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const timersRef = useRef<Set<number>>(new Set());
   const [width, setWidth] = useState(1200);
   const lanes = useMemo(() => maxLanesForWidth(width), [width]);
 
@@ -30,8 +31,15 @@ export function FlowingMessages({ messages, enabled }: { messages: Message[]; en
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => () => {
+    for (const timer of timersRef.current) window.clearTimeout(timer);
+    timersRef.current.clear();
+  }, []);
+
   useEffect(() => {
     if (!enabled) {
+      for (const timer of timersRef.current) window.clearTimeout(timer);
+      timersRef.current.clear();
       setActive([]);
       return;
     }
@@ -47,13 +55,17 @@ export function FlowingMessages({ messages, enabled }: { messages: Message[]; en
         minGapMs: reducedMotion ? 1400 : 1800
       });
       const delay = Math.max(0, assignment.startsAtMs - now);
-      window.setTimeout(() => {
+      const startTimer = window.setTimeout(() => {
+        timersRef.current.delete(startTimer);
         const item: ActiveFlowMessage = { message, lane: assignment.lane, key: `${message.id}-${assignment.startsAtMs}` };
         setActive((items) => [...items.slice(-10), item]);
-        window.setTimeout(() => {
+        const removalTimer = window.setTimeout(() => {
+          timersRef.current.delete(removalTimer);
           setActive((items) => items.filter((activeItem) => activeItem.key !== item.key));
         }, reducedMotion ? 2200 : 9200);
+        timersRef.current.add(removalTimer);
       }, delay);
+      timersRef.current.add(startTimer);
     });
   }, [enabled, lanes, messages, reducedMotion]);
 

@@ -19,4 +19,13 @@ describe("Vercel SPA routing", () => {
     expect(ROUTES.join()).toBe("/join/:inviteCode");
     expect(ROUTES.room()).toBe("/room/:roomId");
   });
+
+  it("sets low-risk browser hardening headers without introducing a brittle CSP", () => {
+    const serialized = JSON.stringify(vercelConfig.headers);
+    expect(serialized).toContain("X-Content-Type-Options");
+    expect(serialized).toContain("Referrer-Policy");
+    expect(serialized).toContain("Permissions-Policy");
+    expect(serialized).toContain("X-Frame-Options");
+    expect(serialized).not.toContain("Content-Security-Policy");
+  });
 });

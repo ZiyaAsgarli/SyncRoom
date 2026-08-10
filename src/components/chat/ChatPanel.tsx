@@ -6,6 +6,7 @@ import { formatMessageTime, validateMessageBody } from "../../utils/messages";
 import { messageSenderName, resolveMessageProfile } from "../../utils/chatMessages";
 import { Avatar } from "../ui/Avatar";
 import { Button } from "../ui/Button";
+import { userFacingError } from "../../utils/userFacingError";
 
 interface ChatPanelProps {
   room: Room;
@@ -73,7 +74,7 @@ export function ChatPanel({ room, messages, members, currentProfile, flowingEnab
       setBody("");
       setEmojiOpen(false);
     } catch (sendError) {
-      setError(sendError instanceof Error ? sendError.message : "Message could not be sent.");
+      setError(userFacingError(sendError, "Message could not be sent."));
     } finally {
       setSending(false);
     }
