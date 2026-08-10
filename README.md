@@ -1,125 +1,235 @@
 # SyncRoom
 
-SyncRoom is a private two-person watch-party web application. It is intentionally not a public platform: one permanent owner approves the Google accounts that may sign in, and each room still contains only the owner and one approved guest.
+> A private two-person synchronized watch-party application for YouTube and private Google Drive videos.
 
-Visual tagline: "Just us, perfectly in sync."
+**Just us, perfectly in sync.**
+
+[![React](https://img.shields.io/badge/React-18-20232a?logo=react&logoColor=61dafb)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Supabase](https://img.shields.io/badge/Supabase-Auth%20%7C%20Postgres%20%7C%20Realtime-1c1c1c?logo=supabase)](https://supabase.com/)
+[![Vercel](https://img.shields.io/badge/Deployed_on-Vercel-000?logo=vercel)](https://sync-room-virid.vercel.app/)
+![Tests](https://img.shields.io/badge/tests-224_passing-76e4c4)
+![Audit](https://img.shields.io/badge/npm_audit-0_vulnerabilities-76e4c4)
+
+**Production:** [sync-room-virid.vercel.app](https://sync-room-virid.vercel.app/)
+
+**Status:** v1.0 release candidate, production-tested
+
+Access is intentionally restricted. Only the permanent owner and Google accounts explicitly approved by that owner can enter.
+
+## What Is SyncRoom?
+
+SyncRoom is a private watch room for two people. The host selects a YouTube or shared Google Drive video and controls the authoritative playback state; the guest follows in near real time while keeping local control of volume, captions, and fullscreen.
+
+The project combines low-latency Realtime events with durable PostgreSQL recovery state, private channel authorization, responsive chat, and a same-origin service-worker gateway for authenticated Google Drive media streaming. It has no custom application or media backend.
+
+## Highlights
+
+- Private Google OAuth access with one owner and owner-approved guests.
+- Exactly two active participants per room, enforced by PostgreSQL RPCs and locking.
+- Host-authoritative Play, Pause, seek, playback rate, and 10-second skip controls.
+- Supabase private Broadcast and Presence channels protected by Realtime RLS.
+- Durable playback recovery after refresh, reconnect, or missed Realtime events.
+- Private Google Drive playback without public links or server-side video storage.
+- Realtime chat with optimistic delivery, identity hydration, emoji, and flowing video overlays.
+- Watch-first layouts for desktop, tablet, mobile portrait, and mobile landscape.
+
+## Demo And Screenshots
+
+The production deployment is private, so signing in requires an owner-approved Google account.
+
+Sanitized portfolio screenshots are not committed yet. The capture checklist and expected filenames are documented in [`docs/assets/screenshots/README.md`](docs/assets/screenshots/README.md). No private emails, invite codes, file identifiers, OAuth data, or browser administration UI should appear in public captures.
+
+## Core Features
+
+### Authentication And Access
+
+- Google OAuth through Supabase Auth.
+- One permanent owner and any number of owner-approved guest emails.
+- Owner-managed add, revoke, and restore actions from the dashboard.
+- Unknown and revoked accounts denied before private data is opened.
+- Invite possession alone never grants application access.
+
+### Rooms And Chat
+
+- Private invite deep links with Vercel SPA fallback support.
+- Owner-hosted rooms limited to the owner and one active guest.
+- Presence, leave, room ending, and reconnect handling.
+- Persistent Realtime chat with optimistic confirmation and duplicate prevention.
+- Sender identity repair when membership data arrives after a message.
+- Flow-over-video messages for live traffic only; history never replays after refresh.
+- Inline mobile chat, emoji insertion, and keyboard-safe composition.
+
+### YouTube
+
+- URL parsing for standard, shortened, embed, mobile, and Shorts URLs.
+- YouTube IFrame Player API with no YouTube Data API key.
+- Host-authoritative Play, Pause, seek, rate, rewind 10, and forward 10.
+- Local captions/settings access, mute, volume, and fullscreen.
+- Autoplay-blocked recovery, heartbeat drift correction, and refresh recovery.
+
+### Google Drive
+
+- Incremental Google Identity Services authorization using `drive.file` only.
+- Google Picker selection for MP4 and WebM files.
+- Exact-file access for each browser; the host shares the source file with the guest.
+- OAuth-authenticated byte-range streaming through a same-origin service worker.
+- Host-authoritative Play, Pause, seek, rewind 10, and forward 10.
+- Guest read-only time and progress display.
+- Silent token bootstrap/renewal when Google permits, plus bounded media recovery.
 
 ## Architecture
 
-- Frontend: React, Vite, TypeScript, Tailwind CSS, Motion for React, React Router, Lucide React.
-- Auth, database, realtime, and presence: Supabase Free.
-- Deployment target: Vercel Hobby for the static frontend.
-- Google OAuth: Google Cloud Console OAuth app in Testing mode.
+```mermaid
+flowchart LR
+    Owner[Owner browser] --> App[React + Vite application]
+    Guest[Guest browser] --> App
 
-There is no custom Node.js, Express, Socket.IO, Railway, Render, Cloud Run, Redis, or service-role frontend backend. Supabase PostgreSQL functions, constraints, and RLS policies enforce private access and two-person room capacity.
-
-## Private Two-Person Constraint
-
-The private access list lives in `public.allowed_users`, not in public frontend environment variables. The owner can approve or revoke guests through owner-only RPCs; guests cannot enumerate or modify the list. The frontend never stores a service-role key and cannot write the table directly.
-
-## Environment Variables
-
-Copy `.env.example` to `.env.local`:
-
-```bash
-VITE_APP_NAME=SyncRoom
-VITE_SUPABASE_URL=your-project-url
-VITE_SUPABASE_ANON_KEY=your-anon-key
-VITE_GOOGLE_CLIENT_ID=your-google-web-oauth-client-id
-VITE_GOOGLE_PICKER_API_KEY=your-google-picker-api-key
-VITE_GOOGLE_APP_ID=your-google-cloud-project-number
+    App --> Auth[Supabase Auth]
+    App --> DB[Supabase PostgreSQL<br/>RPC + RLS]
+    App <--> RT[Supabase Realtime<br/>Broadcast + Presence]
+    App <--> YT[YouTube IFrame API]
+    App --> GIS[Google Identity Services<br/>and Picker]
+    App <--> SW[Same-origin Drive<br/>service worker]
+    SW <--> Drive[Google Drive API<br/>files.get alt=media]
 ```
 
-Do not put the two allowed emails in `.env.local`.
+Supabase is the authorization, data, and signaling backend. YouTube media stays with YouTube. Google Drive video bytes travel directly from the Drive API to the browser through the local service worker; they do not pass through SyncRoom infrastructure.
 
-Do not put a Google OAuth Client Secret in any frontend environment file.
+## Playback Synchronization
 
-## Supabase Setup
+The host is authoritative. Major actions are persisted and broadcast with a monotonically increasing playback state version:
 
-1. Create a Supabase project on the Free plan.
-2. Run the migrations in filename order. Existing deployments must apply `supabase/migrations/202608070001_private_room_realtime_authorization.sql` after the owner-managed access migration before deploying the matching private-channel frontend.
-3. For a fresh deployment, seed the permanent owner and optionally one initial guest using the internal compatibility role `friend`:
+- source change
+- Play and Pause
+- explicit seek
+- playback-rate change
 
-```sql
-insert into public.allowed_users (email, private_role)
-values
-  (lower('OWNER_GOOGLE_EMAIL'), 'owner'),
-  (lower('FRIEND_GOOGLE_EMAIL'), 'friend');
+Supabase Realtime Broadcast carries low-latency commands. `room_playback_states` stores a durable recovery snapshot for initial load, refresh, reconnect, and missed-event recovery. While playing, the host broadcasts a heartbeat about every 4.5 seconds and persists a recovery snapshot about every 14 seconds.
+
+Heartbeats never write to PostgreSQL. Target time is derived from the host timestamp, network elapsed time, and playback rate. Small drift is ignored, moderate drift receives a temporary rate correction where supported, and large drift seeks directly. Remote-command suppression prevents player callbacks from echoing an applied host command.
+
+### Bounded Persistence
+
+Playback persistence was redesigned to separate high-frequency Broadcast heartbeats from bounded PostgreSQL snapshots, preventing write amplification and stale-version contention.
+
+- Only the host owns the snapshot timer.
+- Snapshot requests are single-flight and never build an unbounded queue.
+- Periodic snapshots preserve the current authoritative version.
+- A stale optimistic snapshot becomes a safe no-op that returns current state.
+- Repeated failures open a temporary client-side circuit breaker.
+
+## Google Drive Streaming Architecture
+
+An HTML `<video>` element cannot attach an OAuth `Authorization` header. SyncRoom gives the element a same-origin URL instead:
+
+```text
+/__syncroom_drive_media__/{fileId}?generation={generation}
 ```
 
-4. The owner can then manage additional guest accounts from the **Guest access** dashboard section. The migration keeps the existing `friend` row active and uses that enum value internally for all guests to preserve room and message history.
-5. Enable Realtime for `messages` and `room_members` in Supabase if it is not already enabled for those tables. The latest migration also authorizes private Presence and Broadcast topics for active room members; only the host may send on the authoritative playback topic.
+The service worker validates the currently bound file and generation, adds the in-memory OAuth bearer token, forwards the browser `Range` request to `files.get?alt=media`, and streams the response body back without buffering the full video. It preserves required media headers and synthesizes `Content-Range` from trusted Drive metadata when browser CORS visibility hides it.
 
-### Owner-managed guest access
+```mermaid
+sequenceDiagram
+    participant V as HTML Video
+    participant S as SyncRoom Service Worker
+    participant D as Google Drive API
+    V->>S: GET internal media URL + Range
+    S->>S: Validate file and generation
+    S->>D: files.get?alt=media + OAuth + Range
+    D-->>S: 200/206 stream
+    S-->>V: Stream + media range headers
+```
 
-- There is exactly one owner. The application provides no owner-promotion flow.
-- Guest email addresses are trimmed, lowercased, unique, and soft-disabled when access is removed.
-- Revocation preserves profiles, room membership, and message history while immediately blocking protected RLS/RPC access.
-- An already-open guest session is signed out after the next access recheck; protected database operations are denied immediately.
-- An invite link does not grant access by itself. The Google account must also be an active approved guest.
-- Every room remains capped atomically at two active members: the owner and one guest.
-- While the Google OAuth application remains in Testing mode, each newly approved guest must also be added manually as a Google OAuth test user in Google Cloud Console before that account can complete Google sign-in.
-6. Keep Row Level Security enabled.
+Drive tokens remain in browser memory. They are never placed in URLs, local storage, session storage, IndexedDB, Supabase, application logs, or the repository. SyncRoom stores only safe room source metadata and never requires a public Drive link.
 
-## Database Objects
+### Drive Reliability Engineering
 
-Tables:
+- A generation identifier owns every active media session.
+- Worker binding is atomic and acknowledged with `MessageChannel`.
+- The video source is attached only after the matching bind acknowledgement.
+- Stale effect cleanup cannot clear a newer generation.
+- Token replacement rebinds the worker without resetting the video element.
+- React StrictMode and controller replacement are handled idempotently.
+- Missing-session and transient media failures use one bounded recovery path.
 
-- `allowed_users`
-- `profiles`
-- `rooms`
-- `room_members`
-- `messages`
-- `room_playback_states`
+## Security Model
 
-RPC functions:
+- Approved emails live server-side in `public.allowed_users`, never in frontend environment variables.
+- Owner-only RPCs manage guest access; direct client writes to the allowlist are blocked.
+- PostgreSQL RLS limits rooms, profiles, memberships, messages, and playback snapshots.
+- Room creation is owner-only and room capacity is atomically limited to two.
+- Public Supabase Realtime channel access is disabled.
+- Private Broadcast and Presence authorization is enforced through `realtime.messages` RLS.
+- Authoritative playback publishing additionally requires the authenticated room host.
+- Google Drive access uses only `https://www.googleapis.com/auth/drive.file`.
+- No Supabase `service_role` key, OAuth client secret, refresh token, or database credential is used by the frontend.
+- The public repository and its history passed a release-candidate secret-pattern audit.
+- The release-candidate dependency audit reported zero known production vulnerabilities.
 
-- `sync_private_profile`
-- `create_private_room`
-- `join_private_room`
-- `leave_private_room`
-- `end_private_room`
-- `set_room_youtube_source`
-- `set_room_drive_source`
-- `update_room_playback_state`
-- `get_room_playback_snapshot`
+This is defense in depth, not a claim of perfect security. Supabase policies and RPC checks remain the final authorization boundary even when the UI hides an unavailable action.
 
-Security helpers:
+## Private Realtime Topics
 
-- `normalized_auth_email`
-- `is_allowed_user`
-- `is_active_room_member`
-- `is_room_host`
+| Topic | Purpose | Send authorization |
+| --- | --- | --- |
+| `room:<uuid>` | Presence | Active room members |
+| `room:<uuid>:participant` | Readiness and sync requests | Active room members |
+| `room:<uuid>:playback` | Authoritative playback events | Active room host only |
 
-The join RPC locks the target room row and verifies whitelist membership, room existence, non-ended status, non-duplicate membership, capacity below two, and that the joining account is the permitted second private role.
+Chat persistence and delivery continue through the `messages` table and room-filtered Postgres Changes. Broadcast heartbeats do not replace chat persistence or database recovery snapshots.
 
-## Google OAuth Setup
+## Owner-Managed Guest Access
 
-In Google Cloud Console:
+The owner may approve multiple Google emails, but every room remains an owner-plus-one-guest experience. Guests cannot create rooms, manage or enumerate the allowlist, promote themselves, publish authoritative playback events, or read unrelated room history. Revocation is soft so historical profiles, memberships, and messages remain intact while protected access is denied.
 
-1. Create an OAuth consent screen.
-2. Keep the app in Testing mode.
-3. Add the owner and every currently approved guest Google account as test users.
-4. Create an OAuth web client.
-5. Add Supabase's Google callback URL from Supabase Auth provider settings.
+## Responsive Experience
 
-In Supabase:
+- Viewport-constrained desktop watch stage with an internally scrolling chat sidebar.
+- Stacked, watch-first tablet portrait layout.
+- Inline mobile chat below the player rather than a modal chat sheet.
+- Touch-sized controls and read-only guest progress.
+- Real fullscreen for the player stage with best-effort landscape orientation locking.
+- Safe-area, dynamic viewport, reduced-motion, and keyboard-aware styling.
 
-1. Enable Google provider under Authentication.
-2. Add the Google client ID and secret.
-3. Add local and Vercel redirect URLs:
-   - `http://localhost:5173`
-   - `http://localhost:5173/`
-   - `https://YOUR-VERCEL-DOMAIN.vercel.app`
-   - `https://YOUR-VERCEL-DOMAIN.vercel.app/`
+## Technology Stack
 
-Do not request Google Drive scopes during normal login. Step 3 uses Google Identity Services incremental authorization only when a user explicitly chooses or connects a Drive video.
+| Area | Technologies |
+| --- | --- |
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS, Motion, React Router, Lucide |
+| Data and auth | Supabase Auth, PostgreSQL, RPC functions, Row Level Security |
+| Realtime | Supabase Broadcast, Presence, Postgres Changes |
+| Media | YouTube IFrame API, Google Identity Services, Google Picker, Drive API, Service Worker, HTML5 Video |
+| Validation and tests | Zod, Vitest, Testing Library, ESLint, TypeScript |
+| Deployment | Vercel |
+
+## Production QA
+
+The v1.0 release candidate completed:
+
+- 224 automated tests across 52 test files.
+- ESLint, TypeScript, and production-build verification.
+- `npm audit --omit=dev` with zero reported vulnerabilities.
+- Authenticated owner/guest tests for access, Presence, chat, YouTube, and Drive.
+- Play, Pause, seek, 10-second skip, fullscreen, reconnect, and silent Drive restore tests.
+- Mobile, tablet, desktop, direct-route, private-Realtime, and service-worker checks.
+
+These are unit, component, and architecture tests plus manual production QA; the repository does not claim a full automated browser E2E suite. See [`docs/V1_PRODUCTION_QA.md`](docs/V1_PRODUCTION_QA.md) for the detailed checklist.
 
 ## Local Development
 
+Requirements: a recent Node.js/npm version, a Supabase project, and Google Cloud configuration for Google OAuth and Drive.
+
 ```bash
 npm install
+cp .env.example .env.local
 npm run dev
+```
+
+On Windows, copy `.env.example` to `.env.local` manually or run:
+
+```powershell
+Copy-Item .env.example .env.local
 ```
 
 Validation commands:
@@ -131,318 +241,106 @@ npm run test
 npm run build
 ```
 
-The production release checklist is in `docs/V1_PRODUCTION_QA.md`.
+## Environment Variables
 
-## Vercel Deployment
+| Variable | Purpose |
+| --- | --- |
+| `VITE_APP_NAME` | Display name, normally `SyncRoom` |
+| `VITE_SUPABASE_URL` | Public Supabase project URL |
+| `VITE_SUPABASE_ANON_KEY` | Public Supabase anonymous key; authorization still depends on RLS |
+| `VITE_GOOGLE_CLIENT_ID` | Google browser OAuth client ID |
+| `VITE_GOOGLE_PICKER_API_KEY` | Browser API key restricted to Google Picker API |
+| `VITE_GOOGLE_APP_ID` | Google Cloud project number used by Picker |
 
-1. Import this repository into Vercel.
-2. Use the Vite defaults:
-   - Build command: `npm run build`
-   - Output directory: `dist`
-3. Add `VITE_APP_NAME`, `VITE_SUPABASE_URL`, and `VITE_SUPABASE_ANON_KEY`.
-4. Add the final Vercel URL to Supabase Auth redirect URLs and Google OAuth authorized origins/redirect configuration.
+Never place a Google OAuth client secret, Supabase `service_role` key, Drive access token, database password, or refresh token in frontend environment files.
 
-The production response also sets low-risk `nosniff`, referrer, permissions, and anti-framing headers. A Content Security Policy is intentionally deferred until its Google OAuth, Picker, YouTube, Supabase, and Drive endpoint allowlists can be exercised end to end.
+## Supabase Setup
 
-## Security and RLS Overview
+Apply the SQL files in [`supabase/migrations`](supabase/migrations) in filename order. The migrations cover:
 
-- Unknown users cannot read application data.
-- Whitelisted users sync profiles through Google OAuth metadata.
-- The whitelist table rejects direct frontend reads and writes.
-- Rooms and memberships are changed through RPCs.
-- Messages are readable and writable only by active room members.
-- Message inserts require `user_id = auth.uid()`.
-- Ended rooms reject new joins.
-- Host-only room ending is enforced by `end_private_room`.
-- Room Presence and Broadcast use private Realtime channels. Active membership is required to receive or send; the authoritative playback topic additionally requires host membership.
+1. Foundation schema, access helpers, profiles, rooms, messages, and room RPCs.
+2. Realtime publication and YouTube playback state.
+3. Google Drive source metadata.
+4. Playback snapshot concurrency and write-amplification protection.
+5. Owner-managed guest access.
+6. Private Realtime Broadcast and Presence authorization.
 
-## Completed in Step 1
-
-- Vite React TypeScript project foundation.
-- Supabase Auth Google login flow.
-- Private whitelist verification and denied-account sign-out.
-- Dashboard for two private users.
-- Secure room create/join/leave/end service calls.
-- Realtime message history and sending.
-- Supabase Presence integration.
-- Responsive watch-room layout.
-- Flowing horizontal messages over the video placeholder.
-- Reduced-motion behavior for flowing messages.
-- Tests for invite code normalization, message validation, lane assignment, route behavior, and room status utilities.
-
-## Completed in Step 2
-
-- Fixed realtime chat delivery by validating `postgres_changes` INSERT payloads and merging inserted rows directly into local chat state.
-- Added optimistic-message deduplication that replaces matching optimistic rows with confirmed database rows.
-- Split historical chat history from the live flowing-message queue so refreshes and old rooms do not replay prior messages over the player.
-- Added a compact accessible emoji picker in the message composer.
-- Added invite-copy feedback with clipboard fallback and failure state.
-- Added route-level lazy loading and room-only YouTube code loading.
-- Added YouTube URL parsing for `watch`, `youtu.be`, `embed`, mobile, and Shorts links.
-- Added the YouTube IFrame Player API adapter.
-- Added host-authoritative playback state storage, Realtime Broadcast events, readiness, heartbeats, snapshot recovery, drift utilities, and echo suppression.
-
-## Completed in Step 3
-
-- Added browser-side Google Drive video selection without adding a custom backend.
-- Added incremental Google Identity Services authorization for `https://www.googleapis.com/auth/drive.file`.
-- Added Google Picker integration for single-file MP4/WebM selection.
-- Added safe Drive metadata validation and `set_room_drive_source`.
-- Extended playback source state to support `youtube` and `google_drive`.
-- Added a generic playback adapter surface shared by YouTube and Drive.
-- Added native HTML5 Drive playback through a same-origin service worker media gateway.
-- Added Range forwarding from the browser video element to Google Drive media downloads.
-- Kept Drive access tokens client-side and in memory only.
-- Added friend-side Drive connect flow for the exact host-selected file.
-- Preserved the host-authoritative sync layer for play, pause, seek, rate, heartbeat, drift correction, and snapshots.
-
-See `docs/GOOGLE_DRIVE_SETUP.md` and `docs/STEP_3_DRIVE_QA.md`.
-
-## Realtime Chat Fix
-
-The `messages` table must be included in the `supabase_realtime` publication. Step 2 adds an idempotent migration that safely adds:
-
-- `public.messages`
-- `public.room_members`
-
-This normalizes the manual SQL that may already have been run:
+Seed exactly one owner using a placeholder email, then manage guests through the application:
 
 ```sql
-alter publication supabase_realtime add table public.messages;
+insert into public.allowed_users (email, private_role)
+values (lower('owner@example.com'), 'owner');
 ```
 
-The frontend now subscribes to:
+Enable Google in Supabase Auth, add the Supabase Google callback to the OAuth client, configure local and production redirect URLs, and keep RLS enabled. The `messages` and `room_members` tables must be included in the `supabase_realtime` publication. Public Realtime channel access is disabled for the production deployment.
 
-- event: `INSERT`
-- schema: `public`
-- table: `messages`
-- filter: `room_id=eq.<current-room-id>`
+## Google OAuth And Drive Setup
 
-The subscription is created only after the room and authenticated profile are ready, logs status in development, handles `SUBSCRIBED`, `CHANNEL_ERROR`, `TIMED_OUT`, and `CLOSED`, and removes the channel on cleanup.
+Normal sign-in uses Supabase Google OAuth without Drive scopes. Drive access is requested separately through Google Identity Services only when a Drive source must be selected or restored.
 
-Presence and playback Broadcast channels are private. Playback uses separate topics for host-authoritative commands and participant readiness/recovery traffic so a guest cannot publish a forged Play, Pause, Seek, Rate, source, or heartbeat command on the authoritative topic.
-
-## Flowing Messages
-
-Initial chat history is loaded into the chat panel only. A baseline of known message IDs is established before the subscription is marked ready. Only new live messages after that baseline enter the flowing-message queue.
-
-## Emoji Behavior
-
-The message composer includes a small custom emoji grid. Selecting an emoji inserts it at the current cursor position, keeps the textarea focused, closes on outside click or Escape, and does not interfere with native mobile emoji keyboards.
-
-## YouTube Architecture
-
-Step 2 uses the official YouTube IFrame Player API. No YouTube Data API key is required because SyncRoom does not search YouTube or fetch metadata.
-
-- The host selects or replaces the YouTube source.
-- The friend sees a waiting state and cannot edit the source.
-- Host controls play, pause, seek, and speed.
-- Friend playback controls are locked and marked as host-controlled.
-- Volume, mute, fullscreen, cinema mode, chat, and flowing-message toggle remain local.
-
-## Google Drive Architecture
-
-Google Drive authorization is separate from normal login. SyncRoom requests Drive access only after an explicit user action:
-
-- Host clicks Choose from Google Drive.
-- Friend clicks Connect Google Drive for a host-selected Drive source.
-
-The requested scope is only:
+The current private deployment uses Google OAuth Testing mode. Each newly approved SyncRoom guest must also be added manually as a Google OAuth Test User. Drive authorization must remain limited to:
 
 ```text
 https://www.googleapis.com/auth/drive.file
 ```
 
-Drive tokens are never stored in Supabase, PostgreSQL, URLs, localStorage, sessionStorage, chat, or logs. They remain local to the browser session and are passed to the service worker through a page-to-service-worker message for the currently selected file only.
+The Google Picker browser key is API-restricted to Google Picker API. Application/referrer restriction is currently unset because an earlier referrer-restricted configuration caused Picker rejection. Picker now calls `setOrigin(window.location.origin)`; website-referrer restriction should be retested separately before enforcement.
 
-The host selects an MP4 or WebM file through Google Picker. SyncRoom stores only safe metadata:
+Detailed instructions: [`docs/GOOGLE_DRIVE_SETUP.md`](docs/GOOGLE_DRIVE_SETUP.md).
 
-- file ID
-- filename
-- MIME type
-- file size
-- modified time
+## Deployment
 
-The friend must have the file shared with their Google account. SyncRoom does not modify Google Drive permissions and does not require public sharing.
+SyncRoom is a Vite SPA deployed on Vercel:
 
-## Drive Media Streaming
+- Build command: `npm run build`
+- Output directory: `dist`
+- Environment variables: the six public frontend variables listed above
+- SPA rewrite: all client routes fall back to `/index.html`
+- Static worker: `/syncroom-drive-sw.js` remains a real JavaScript asset
 
-A normal `<video>` element cannot attach an OAuth `Authorization` header. SyncRoom uses a same-origin service worker route instead:
+Add the production origin to Supabase Auth redirect URLs and Google OAuth authorized JavaScript origins. The deployed application uses low-risk `nosniff`, referrer, permissions, and anti-framing headers. A restrictive CSP is intentionally deferred until every third-party media/auth endpoint can be exercised safely.
 
-```text
-/__syncroom_drive_media__/{fileId}
-```
-
-The service worker validates the internal file ID, rejects unbound files, and fetches:
+## Project Structure
 
 ```text
-https://www.googleapis.com/drive/v3/files/{fileId}?alt=media
+src/
+  components/       UI, chat, access, and watch-stage components
+  contexts/         Authentication lifecycle
+  hooks/            Realtime and media lifecycle coordination
+  pages/            Login, dashboard, invite, and room routes
+  services/         Supabase, Google Drive, Picker, and playback adapters
+  utils/            Pure validation, sync, message, and persistence logic
+public/
+  syncroom-drive-sw.js
+supabase/
+  migrations/
+docs/
+  GOOGLE_DRIVE_SETUP.md
+  STEP_3_DRIVE_QA.md
+  V1_PRODUCTION_QA.md
 ```
 
-It forwards browser `Range` requests and streams the Google Drive response body back to the video element. It preserves safe media headers such as `Content-Type`, `Content-Length`, `Content-Range`, `Accept-Ranges`, and `ETag` where Drive provides them. It does not cache Drive video bytes.
+## Known Limitations
 
-If service workers are unavailable, SyncRoom shows a secure streaming unsupported message and YouTube remains usable.
+- Rooms intentionally support only the owner and one guest.
+- Google OAuth Testing mode requires manual Google Test User management.
+- A Drive file must be explicitly shared with the intended guest.
+- Drive playback is limited to MP4/WebM and the codecs supported by each browser/device.
+- SyncRoom does not transcode video or host Drive video bytes.
+- Drive subtitle files are not supported.
+- Picker website-referrer restriction still requires a separate production retest.
 
-## Playback Synchronization
+## Future Possibilities
 
-Realtime Broadcast is used for low-latency playback events. PostgreSQL `room_playback_states` is used for initial load, refresh, reconnect, and missed-event recovery.
+- Installable PWA behavior.
+- A custom production domain.
+- Drive subtitle support.
+- A broader automated browser E2E suite.
+- Google OAuth production publishing if the product audience expands.
+- Additional local-only playback preferences.
 
-Events are validated with Zod and include room ID, event ID, sender, state version, timestamp, video ID, time, rate, and status. Wrong-room, malformed, duplicate, stale, and unauthorized host-command events are rejected.
+## Author
 
-The host is authoritative. Only the host can write playback state through:
+**Ziya Asgarli**
 
-- `set_room_youtube_source`
-- `update_room_playback_state`
-
-Friends can read snapshots through:
-
-- `get_room_playback_snapshot`
-
-Remote commands use a short suppression window so applying a remote play, pause, seek, or rate change does not echo back as a new local command.
-
-## Autoplay, Drift, Buffering, and Reconnect
-
-SyncRoom does not try to bypass browser autoplay rules. Each participant taps to enable synchronized playback. If playback is blocked, the UI shows a local non-intrusive state and waits for a user gesture.
-
-Drift correction calculates:
-
-```text
-targetTime = eventCurrentTime + networkElapsedSeconds * playbackRate
-```
-
-Small drift is ignored, medium drift uses temporary rate correction where supported, and larger drift seeks directly. Correction is skipped while buffering.
-
-The host broadcasts heartbeats approximately every 4.5 seconds and persists snapshots approximately every 14 seconds while playing, plus immediate persistence on important state changes.
-
-Heartbeats are Supabase Realtime Broadcast only. They must not call `update_room_playback_state`.
-
-Periodic recovery snapshots preserve the current `state_version`. Major authoritative changes increment it:
-
-- source change
-- play
-- pause
-- explicit seek
-- playback-rate change
-
-Stale snapshot writes are treated as no-op optimistic-concurrency results and return the latest row instead of raising a transaction error.
-
-## Playback Request-Count QA
-
-Before opening SyncRoom against the live Supabase project, reset query stats if `pg_stat_statements` is enabled:
-
-```sql
-select pg_stat_statements_reset();
-```
-
-Then:
-
-1. Open one host browser.
-2. Enter a room.
-3. Load a YouTube video.
-4. Play for 60 seconds.
-5. Do not interact.
-6. Query `pg_stat_statements` for `update_room_playback_state`.
-
-Expected periodic calls: approximately 4-5, not hundreds, thousands, or millions.
-
-Then:
-
-7. Add the friend.
-8. Play another 60 seconds.
-9. Confirm the guest does not double the snapshot count.
-10. Perform Play, Pause, and Seek commands.
-11. Confirm only reasonable additional command writes appear.
-
-Also inspect Postgres Logs. Expected: zero repeated `Stale playback state version` errors.
-
-On refresh or reconnect, the app restores auth, room membership, playback snapshot, channel subscription, player initialization, and then requests a fresh sync.
-
-## Manual Two-Browser QA Checklist
-
-Use a normal Chrome window for the owner and an Incognito window for the friend.
-
-1. Owner login
-2. Friend login
-3. Owner creates room
-4. Invite copies and shows feedback
-5. Friend joins
-6. Friend sends message
-7. Owner receives message instantly without refresh
-8. Owner sends message
-9. Friend receives message instantly without refresh
-10. No duplicate chat messages
-11. Refreshing does not replay old messages over video
-12. New messages flow over video
-13. Emoji insertion works
-14. Host adds YouTube URL
-15. Both players load same video
-16. Both enable playback
-17. Host plays
-18. Host pauses
-19. Host seeks
-20. Host changes speed
-21. Friend synchronized controls remain locked
-22. Friend changes local volume
-23. Friend refreshes while playing
-24. Host refreshes while playing
-25. Temporary connection loss
-26. Chat during playback
-27. Flowing messages during playback
-28. Fullscreen
-29. Cinema mode
-30. Mobile portrait
-31. Mobile landscape
-32. Room ending
-33. Third account remains blocked
-34. Friend cannot forge host events
-
-## Remote Play Regression Checklist
-
-Use this checklist after the remote Play fix:
-
-1. Open owner in normal Chrome.
-2. Open friend in Incognito.
-3. Join the same room.
-4. Load an embeddable YouTube video.
-5. Click Enable sync on both.
-6. Confirm both show ready.
-7. Host presses Play.
-8. Confirm both videos begin without refreshing.
-9. Confirm timestamps remain close.
-10. Host presses Pause.
-11. Confirm both pause.
-12. Host presses Play again.
-13. Confirm both resume.
-14. Host seeks.
-15. Confirm both reach the same position.
-16. Refresh friend while host is playing.
-17. Re-enable playback if the browser requires a gesture.
-18. Confirm the friend resumes at the current host position.
-
-## Current Limitations
-
-- Google Drive playback requires manual Google Cloud setup before live testing.
-- Google Drive files must be shared manually from the host to the friend in Google Drive.
-- Only MP4 and WebM are treated as supported Drive formats; browser codec support can still vary by device.
-- Drive access tokens are temporary, so long sessions may require reconnecting Drive.
-- Full Drive QA requires the live Supabase project, Google Picker, a shared Drive file, and two real Google test accounts.
-- YouTube playlists, search, queueing, and the YouTube Data API are intentionally excluded.
-- Public Drive links, uploads, automatic Drive permission changes, subtitles, transcoding, and playlists are intentionally excluded.
-
-## Troubleshooting
-
-- If login succeeds but returns to access denied, confirm the Google email is lowercase in `allowed_users`.
-- If profile sync fails, confirm the Google provider is enabled in Supabase Auth.
-- If messages do not appear live, confirm Supabase Realtime is enabled for the relevant tables.
-- If OAuth redirects fail, check Supabase, Google, and Vercel URLs for exact protocol and domain matches.
-- Never fix authorization by adding frontend email environment variables.
-
-## Recommended Step 4 Scope
-
-Step 4 should be stabilization only after Google Drive synchronization is confirmed through the manual QA checklist:
-
-- Polish any Drive browser/device issues discovered in two-browser QA.
-- Improve token-expiry recovery messaging if needed.
-- Tighten mobile Drive playback ergonomics after real-device testing.
-- Add only targeted fixes for observed Drive playback or sharing edge cases.
-- Do not add public rooms, queues, uploads, playlists, or broader Drive scopes.
+[github.com/ZiyaAsgarli](https://github.com/ZiyaAsgarli)

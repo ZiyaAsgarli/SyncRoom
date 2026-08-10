@@ -1,125 +1,94 @@
-# Step 3 Drive QA
+# Google Drive Playback QA
 
-Manual QA requires the live Supabase project, the two approved Google accounts, and Google Cloud Drive/Picker configuration from `docs/GOOGLE_DRIVE_SETUP.md`.
+Manual QA requires the live Supabase project, an owner and approved guest, and the Google Cloud Drive/Picker configuration from [`GOOGLE_DRIVE_SETUP.md`](GOOGLE_DRIVE_SETUP.md).
 
 ## Setup
 
-1. Host and friend Google accounts both exist in the SyncRoom whitelist.
-2. Host uploads an MP4 to Google Drive.
-3. Host manually shares that file with the friend as Viewer.
+1. The owner and guest are active SyncRoom accounts and Google OAuth test users.
+2. The owner has an MP4 or WebM in Google Drive.
+3. The owner shares that file with the guest as Viewer.
 4. Both accounts enter the same SyncRoom room.
 
-## Host Source Selection
+## Source Selection And Access
 
-5. Host chooses Google Drive.
-6. Drive consent appears only now.
-7. Host selects the MP4.
-8. Picker closes.
-9. Filename appears in the room.
-10. Video loads for the host.
-
-## Friend Access
-
-11. Friend sees Drive source selected.
-12. Friend connects Google Drive.
-13. If required by `drive.file`, friend grants app access to the exact same file through Picker.
-14. Video loads for the friend.
+5. The host chooses Google Drive and authorizes `drive.file` when required.
+6. The host selects the video in Google Picker.
+7. The Picker closes and the selected filename appears in the room.
+8. The host video loads through the service-worker media gateway.
+9. The guest authorizes Drive access to the exact shared file when required.
+10. The guest video loads without changing the room source.
 
 ## Synchronization
 
-15. Both click Enable sync.
-16. Host presses Play.
-17. Both videos start.
-18. Let playback run 30 seconds.
-19. No rollback occurs.
-20. Host presses Pause.
-21. Both pause.
-22. Host resumes.
-23. Both resume.
-24. Host seeks +30 seconds.
-25. Friend follows.
-26. Host intentionally seeks backward.
-27. Friend follows.
-28. Let playback run another 30 seconds.
-29. No drift rollback occurs.
+11. If the browser requires a playback gesture, the guest taps the video once to sync.
+12. The host presses the explicit Play control; both videos start.
+13. Let playback run for at least 30 seconds and confirm there is no heartbeat rollback.
+14. The host pauses and resumes; the guest follows both commands.
+15. The host seeks forward and backward; the guest follows.
+16. The host uses rewind 10 and forward 10; exactly one authoritative seek is applied each time.
+17. The guest timeline displays time and progress but cannot seek.
+18. Guest volume and fullscreen remain local.
 
 ## Range Streaming
 
-30. Seek near the middle of a large video.
-31. Confirm the browser performs a Range request.
-32. Confirm playback does not download the entire file from byte zero.
-33. Seek near the end.
-34. Playback resumes.
+19. Seek near the middle of a large video and confirm a byte `Range` request.
+20. Confirm the response is a valid `206` with `Content-Range`, `Content-Length`, `Accept-Ranges`, and the video MIME type.
+21. Seek near the end and confirm playback resumes without downloading the entire file into memory.
+22. Confirm an out-of-bounds range produces `416`.
 
-Development-only service worker logs should show media range/status diagnostics without tokens or emails.
+Development-only diagnostics may show safe media range/status data, but never tokens, emails, or complete private identifiers.
 
 ## Chat And Overlays
 
-35. Send a live message while Drive video plays.
-36. Message appears instantly.
-37. Flowing message appears over the video.
-38. Player is not recreated.
+23. Send owner and guest messages while Drive playback runs.
+24. Each message appears once with the correct sender identity.
+25. New live messages flow over video when enabled; historical messages do not replay.
+26. Fullscreen keeps flowing messages and local controls above the video.
+27. Chat, overlay visibility, and fullscreen do not recreate the video element.
 
-## Refresh And Reconnect
+## Refresh, Token Renewal, And Recovery
 
-39. Refresh the friend browser.
-40. Drive reauthorization state appears if required.
-41. Reconnect Drive.
-42. Video recovers near the host's current position.
+28. Refresh the guest while the host is playing.
+29. Confirm the active source restores without Picker or a Connect action when silent Google authorization succeeds.
+30. Confirm playback recovers near the current host position after any required local gesture.
+31. Allow a silent token renewal and confirm it does not reset `src`, call `load()`, pause playback, or reconnect a valid media session.
+32. Replace the service-worker controller and confirm the active generation rebinds atomically.
+33. If silent authorization genuinely requires interaction, confirm one stable **Connect Google Drive** action appears without popup loops.
 
-## Source Switching
+## Source Switching And Errors
 
-43. Host changes Drive to YouTube.
-44. Both switch cleanly.
-45. Host changes YouTube to Drive.
-46. Both switch cleanly.
+34. Switch Drive to YouTube and back to Drive; both players switch cleanly.
+35. Confirm a valid in-memory Drive authorization is reused.
+36. Test an unshared file and confirm clear permission guidance.
+37. Test an unsupported format and confirm a format-specific error.
+38. Confirm a missing worker session performs one bounded rebind rather than showing a false codec error.
 
-## Errors
+## Mobile And Fullscreen
 
-47. Test an unshared Drive file.
-48. Friend sees permission guidance.
-49. Test an unsupported video format.
-50. Clear unsupported-format error appears.
-51. Revoke or expire the token if practical.
-52. Reconnect Drive works.
-
-## Mobile
-
-53. Test mobile portrait.
-54. Test mobile landscape.
-55. Test fullscreen.
+39. Test phone portrait with inline chat visible below the player.
+40. Test phone landscape and real fullscreen.
+41. Confirm best-effort landscape orientation lock does not reset playback when unsupported.
+42. Test tablet portrait and landscape without horizontal overflow.
 
 ## Expected Security Results
 
-- No Drive access token appears in the URL.
-- No Drive access token appears in console logs.
-- No Drive access token is written to Supabase.
-- YouTube still works if Drive environment variables are missing.
-- Only the host can change the room source.
+- Drive access tokens do not appear in URLs, storage, Supabase, or logs.
+- The service worker fetches only the bound Drive file through the fixed Drive API endpoint.
+- YouTube remains usable when Drive configuration is unavailable.
+- Only the host can change the source or publish authoritative playback commands.
+- The guest cannot write playback snapshots.
 
 ## Playback Snapshot Request Count
 
-Before opening SyncRoom against the live Supabase project, reset query stats if `pg_stat_statements` is enabled:
+If `pg_stat_statements` is enabled and resetting it is operationally safe:
 
 ```sql
 select pg_stat_statements_reset();
 ```
 
-1. Open one host browser.
-2. Enter a room.
-3. Load a YouTube video.
-4. Play for 60 seconds without interacting.
-5. Query `pg_stat_statements` for `update_room_playback_state`.
-
-Expected periodic calls: approximately 4-5, not hundreds, thousands, or millions.
-
-Then:
-
-6. Add the friend.
-7. Play another 60 seconds.
-8. Confirm the guest does not double the snapshot count.
-9. Perform Play, Pause, and Seek commands.
-10. Confirm only reasonable additional command writes appear.
-11. Inspect Postgres Logs.
-
-Expected log result: zero repeated `Stale playback state version` errors.
+1. Play a source as host for 60 seconds without interacting.
+2. Query `pg_stat_statements` for `update_room_playback_state`.
+3. Expect approximately four or five periodic calls, not high-frequency writes.
+4. Add the guest and play another 60 seconds; the guest must not double the snapshot count.
+5. Perform Play, Pause, and Seek commands and confirm only reasonable command writes are added.
+6. Inspect PostgreSQL logs and confirm there are no repeated stale-version or `40001` errors.

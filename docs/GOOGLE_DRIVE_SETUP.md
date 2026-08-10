@@ -18,7 +18,7 @@ Use the existing Web OAuth client, for example `SyncRoom Web`.
 Add Authorized JavaScript origins:
 
 - `http://localhost:5173`
-- the final Vercel HTTPS origin later, for example `https://<vercel-domain>.vercel.app`
+- `https://sync-room-virid.vercel.app`
 
 Do not remove the existing Supabase redirect URI used by Supabase Auth.
 
@@ -49,7 +49,7 @@ Post-release hardening to retest in Google Cloud before enforcement:
 
 - Application restriction: HTTP referrers
 - Local referrer: `http://localhost:5173/*`
-- Production referrer: `https://<vercel-domain>.vercel.app/*`
+- Production referrer: `https://sync-room-virid.vercel.app/*`
 - API restriction: Google Picker API
 
 Previous referrer-restricted testing returned "The API developer key is invalid", so do not change the working production restriction without a two-browser Picker test. Never place a private credential in the browser as a substitute.
