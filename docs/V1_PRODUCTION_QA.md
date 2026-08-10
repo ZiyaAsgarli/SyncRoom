@@ -113,3 +113,16 @@ For each viewport, check zero horizontal overflow, reachable controls, no overla
 - Guest browser/device:
 - Result: PASS / FAIL
 - Open release blockers:
+
+## Release Sign-off
+
+- [x] Automated suite green.
+- [x] Production HTTP green.
+- [x] Supabase private Realtime enabled.
+- [x] Public Realtime disabled.
+- [x] Owner/guest Presence manual QA.
+- [ ] Chat manual QA for this release candidate.
+- [x] YouTube manual QA.
+- [x] Drive manual QA.
+- [ ] Mobile manual QA for this release candidate.
+- [x] No P0/P1 remaining after code, configuration, and production smoke review.
