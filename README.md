@@ -34,11 +34,41 @@ The project combines low-latency Realtime events with durable PostgreSQL recover
 - Realtime chat with optimistic delivery, identity hydration, emoji, and flowing video overlays.
 - Watch-first layouts for desktop, tablet, mobile portrait, and mobile landscape.
 
-## Demo And Screenshots
+## Screenshots
 
-The production deployment is private, so signing in requires an owner-approved Google account.
+The production deployment is private, so signing in requires an owner-approved Google account. The third-party media shown below demonstrates SyncRoom's player integrations; SyncRoom does not own that content.
 
-Sanitized portfolio screenshots are not committed yet. The capture checklist and expected filenames are documented in [`docs/assets/screenshots/README.md`](docs/assets/screenshots/README.md). No private emails, invite codes, file identifiers, OAuth data, or browser administration UI should appear in public captures.
+### Watch together
+
+<p align="center">
+  <img src="docs/assets/screenshots/syncroom-desktop-room.png" alt="SyncRoom desktop watch room with video source controls and realtime chat" width="920">
+</p>
+
+<p align="center"><em>Viewport-aware desktop watch room with synchronized playback and realtime chat.</em></p>
+
+### Mobile experience
+
+<p align="center">
+  <img src="docs/assets/screenshots/syncroom-mobile-room.jpg" alt="SyncRoom mobile watch room with touch playback controls and inline chat" width="320">
+</p>
+
+<p align="center"><em>Watch-first mobile layout with touch controls and inline chat.</em></p>
+
+### Private Google Drive playback
+
+<p align="center">
+  <img src="docs/assets/screenshots/syncroom-drive.png" alt="SyncRoom playing a private Google Drive video beside realtime chat" width="920">
+</p>
+
+<p align="center"><em>Private Google Drive playback streamed through SyncRoom's same-origin service-worker media gateway.</em></p>
+
+### YouTube synchronization
+
+<p align="center">
+  <img src="docs/assets/screenshots/syncroom-youtube.png" alt="SyncRoom YouTube integration with synchronized player controls and realtime chat" width="920">
+</p>
+
+<p align="center"><em>Host-authoritative YouTube playback with synchronized seek, 10-second controls, and local caption settings.</em></p>
 
 ## Core Features
 
