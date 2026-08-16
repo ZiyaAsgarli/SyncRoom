@@ -17,7 +17,7 @@ import type { PlaybackAdapter } from "../../types/playbackAdapter";
 import { formatFileSize, playbackStateToMediaSource } from "../../utils/mediaSource";
 import { isAutoplayPolicyError } from "../../utils/drivePlaybackControls";
 import { driveMediaErrorMessage } from "../../utils/driveMediaLifecycle";
-import { toggleElementFullscreen, unlockScreenOrientation, type ScreenOrientationController } from "../../utils/fullscreen";
+import { exitBrowserFullscreen, getBrowserFullscreenElement, toggleElementFullscreen, unlockScreenOrientation, type ScreenOrientationController } from "../../utils/fullscreen";
 import { canControlPlayback } from "../../utils/playbackPermissions";
 import { calculateAuthoritativeTargetTime, createHeartbeatPayload, decideDriftCorrection, isBackwardHeartbeatUnsafe, issueRelativeAuthoritativeSeek } from "../../utils/playbackSync";
 import { createQueuedRemotePlay, getQueuedRemotePlayTarget, remotePlayBlockReason, shouldReplaceQueuedPlay, type QueuedRemotePlay } from "../../utils/remotePlay";
@@ -60,6 +60,7 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
   const [, setSyncLabel] = useState(isHost ? "Waiting for friend" : "Waiting for host");
   const [isLocalPlaying, setIsLocalPlaying] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isViewportFullscreen, setIsViewportFullscreen] = useState(false);
   const [youTubeControlsMode, setYouTubeControlsMode] = useState(false);
   const [localVolume, setLocalVolume] = useState(1);
   const [localMuted, setLocalMuted] = useState(false);
@@ -79,6 +80,7 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
   const lastCommittedSeekRef = useRef<number | null>(null);
   const recoveryRestoreRef = useRef<{ generation: number; currentTimeSeconds: number; playbackRate: number; shouldPlay: boolean } | null>(null);
   const wasStageFullscreenRef = useRef(false);
+  const viewportFullscreenRef = useRef(false);
   const youTubeControlsModeRef = useRef(false);
   const remoteActionsRef = useRef<RemotePlaybackActions>({
     setSnapshotSource: () => undefined,
@@ -151,15 +153,32 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
 
   useEffect(() => {
     const onFullscreenChange = () => {
-      const nextFullscreen = document.fullscreenElement === playerStageRef.current;
+      const nextFullscreen = getBrowserFullscreenElement(document) === playerStageRef.current;
       if (wasStageFullscreenRef.current && !nextFullscreen) {
         unlockScreenOrientation(getScreenOrientation());
       }
       wasStageFullscreenRef.current = nextFullscreen;
-      setIsFullscreen(nextFullscreen);
+      setIsFullscreen(nextFullscreen || viewportFullscreenRef.current);
     };
     document.addEventListener("fullscreenchange", onFullscreenChange);
-    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", onFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", onFullscreenChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const exitViewportFullscreen = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || !viewportFullscreenRef.current) return;
+      setViewportFullscreen(false);
+    };
+    document.addEventListener("keydown", exitViewportFullscreen);
+    return () => {
+      document.removeEventListener("keydown", exitViewportFullscreen);
+      document.documentElement.classList.remove("syncroom-viewport-fullscreen");
+      if (viewportFullscreenRef.current) unlockScreenOrientation(getScreenOrientation());
+    };
   }, []);
 
   useEffect(() => {
@@ -502,16 +521,33 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
   async function togglePlayerFullscreen(): Promise<void> {
     const target = playerStageRef.current;
     if (!target) return;
+    if (viewportFullscreenRef.current) {
+      setViewportFullscreen(false);
+      return;
+    }
+    const preferLandscape = typeof window.matchMedia === "function"
+      && window.matchMedia("(orientation: portrait) and (max-width: 1180px)").matches;
     try {
-      const preferLandscape = typeof window.matchMedia === "function"
-        && window.matchMedia("(orientation: portrait) and (max-width: 1180px)").matches;
-      await toggleElementFullscreen(target, document.fullscreenElement, () => document.exitFullscreen(), {
+      const mode = await toggleElementFullscreen(target, getBrowserFullscreenElement(document), () => exitBrowserFullscreen(document), {
         orientation: getScreenOrientation(),
         preferLandscape
       });
+      if (mode === "unsupported") {
+        setViewportFullscreen(true);
+        if (preferLandscape) showTransientOverlay("Rotate device for landscape");
+      }
     } catch {
-      showTransientOverlay("Fullscreen unavailable");
+      setViewportFullscreen(true);
+      if (preferLandscape) showTransientOverlay("Rotate device for landscape");
     }
+  }
+
+  function setViewportFullscreen(nextFullscreen: boolean): void {
+    viewportFullscreenRef.current = nextFullscreen;
+    setIsViewportFullscreen(nextFullscreen);
+    setIsFullscreen(nextFullscreen);
+    document.documentElement.classList.toggle("syncroom-viewport-fullscreen", nextFullscreen);
+    if (!nextFullscreen) unlockScreenOrientation(getScreenOrientation());
   }
 
   function handleVideoSurfaceClick(): void {
@@ -731,6 +767,7 @@ export function YouTubeWatchStage({ room, currentProfile, hostProfile, flowMessa
         ref={playerStageRef}
         data-testid="watch-stage"
         data-media-active={activeSource ? "true" : "false"}
+        data-viewport-fullscreen={isViewportFullscreen ? "true" : "false"}
         className={`watch-stage relative w-full max-w-full overflow-hidden bg-[#020405] xl:min-h-0 ${isFullscreen ? "h-dvh max-h-none w-screen rounded-none border-0 shadow-none" : needsSetupFrame ? "min-h-[24rem] border-y border-[var(--color-border)] shadow-[0_24px_72px_rgba(0,0,0,0.46)] ring-1 ring-white/[0.025] sm:aspect-video sm:min-h-0 sm:rounded-[var(--radius-surface)] sm:border xl:max-h-[calc(100dvh-10rem-env(safe-area-inset-top))]" : "aspect-video border-y border-[var(--color-border)] shadow-[0_24px_72px_rgba(0,0,0,0.46)] ring-1 ring-white/[0.025] sm:rounded-[var(--radius-surface)] sm:border xl:max-h-[calc(100dvh-10rem-env(safe-area-inset-top))]"}`}
         onMouseMove={showControls}
         onTouchStart={showControls}

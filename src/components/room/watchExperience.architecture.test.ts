@@ -59,8 +59,10 @@ describe("viewport-aware watch experience architecture", () => {
   });
 
   it("keeps orientation handling local to the fullscreen utility", () => {
-    expect(fullscreenSource.indexOf("await target.requestFullscreen()"))
+    expect(fullscreenSource.indexOf("await requestFullscreen.call(target)"))
       .toBeLessThan(fullscreenSource.indexOf('await options.orientation.lock("landscape")'));
+    expect(fullscreenSource).toContain("webkitRequestFullscreen");
+    expect(stageSource).toContain("syncroom-viewport-fullscreen");
     expect(fullscreenSource).toContain("unlockScreenOrientation");
     expect(fullscreenSource).not.toContain("broadcast");
     expect(fullscreenSource).not.toContain("persist");

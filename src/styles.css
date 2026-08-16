@@ -253,3 +253,23 @@ button {
     max-height: 100dvh;
   }
 }
+
+html.syncroom-viewport-fullscreen,
+html.syncroom-viewport-fullscreen body,
+html.syncroom-viewport-fullscreen #root {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.watch-stage[data-viewport-fullscreen="true"] {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 9999;
+  width: 100vw !important;
+  height: 100dvh !important;
+  max-width: none !important;
+  max-height: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+}

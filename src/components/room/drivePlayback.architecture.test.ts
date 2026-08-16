@@ -34,8 +34,10 @@ describe("Drive cinema playback architecture", () => {
 
   it("fullscreens only the player stage and tracks browser fullscreen changes", () => {
     expect(stageSource).toContain("ref={playerStageRef}");
-    expect(stageSource).toContain("toggleElementFullscreen(target, document.fullscreenElement");
+    expect(stageSource).toContain("toggleElementFullscreen(target, getBrowserFullscreenElement(document)");
     expect(stageSource).toContain('document.addEventListener("fullscreenchange"');
+    expect(stageSource).toContain('document.addEventListener("webkitfullscreenchange"');
+    expect(stageSource).toContain('data-viewport-fullscreen={isViewportFullscreen ? "true" : "false"}');
     expect(stageSource).not.toContain("document.documentElement.requestFullscreen");
   });
 
